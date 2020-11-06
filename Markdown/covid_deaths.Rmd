@@ -1,0 +1,763 @@
+---
+title: "A Two-Stage Modeling Framework for Analyzing COVID-19 Deaths By County"
+author:
+  - name: "Fadel M. Megahed ^[Email: fmegahed@miamioh.edu | Phone: +1-513-529-4185 | Website: <a href=\"https://miamioh.edu/fsb/directory/?up=/directory/megahefm\">Miami University Official</a>]"
+    affiliation: Farmer School of Business, Miami University
+  - name: "Allison Jones-Farmer ^[Email: farmerl2@miamioh.edu | Phone: +1-513-529-4823 | Website: <a href=\"https://miamioh.edu/fsb/directory/?up=/directory/farmerl2\">Miami University Official</a>]"
+    affiliation: Farmer School of Business, Miami University
+  - name: "Steve Rigdon ^[Email: steve.rigdon@slu.edu | Website: <a href=\"https://www.slu.edu/public-health-social-justice/faculty/rigdon-steven.php\">Saint Louis University Official</a>]"
+    affiliation: College of  Public Health and Social Justice, Saint Louis University
+bibliography: covidRefs.bib
+csl: apa.csl
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    number_sections: TRUE
+    theme: simplex
+    paged_df: TRUE
+    code_folding: show
+    code_download: TRUE
+  includes:
+    in_header: structure.tex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE,
+                      cache = TRUE,
+                      progress = FALSE, 
+                      verbose = FALSE,
+                      dpi = 300,
+                      out.width = '100%')
+options(qwraps2_markup = "markdown")
+
+library(ggplot2); theme_set(theme_bw(base_size = 16, base_family = "Arial")) # setting the preferred ggplot theme to bw
+default_sizing = function(){r2d3::sizingPolicy(padding = 0, browser.padding = 0, browser.fill = TRUE)}
+par(mar = c(0,0,0,0), xaxs="i", yaxs="i")
+```
+
+
+# R Setup and Required Packages
+In this project, the open-source R programming language is used to model the progression in the COVID-19 pandemic in different U.S. counties. R is maintained by an international team of developers who make the language available at [The Comprehensive R Archive Network](https://cran.r-project.org/). Readers interested in reusing our code and reproducing our results should have R installed locally on their machines. R can be installed on a number of different operating systems (see [Windows](https://cran.r-project.org/bin/windows/), [Mac](https://cran.r-project.org/bin/macosx/), and [Linux](https://cran.r-project.org/bin/linux/) for the installation instructions for these systems). We also recommend using the RStudio interface for R. The reader can [download RStudio](http://www.rstudio.com/ide) for free by following the instructions at the link. For non-R users, we recommend the [Hands-on Programming with R](https://rstudio-education.github.io/hopr/packages.html) for a brief overview of the software's functionality. Hereafter, we assume that the reader has an introductory understanding of the R programming language.
+
+In the code chunk below, we load the packages used to support our analysis. Note that the code of this and any of the code chunks can be hidden by clicking on the 'Hide' button to facilitate the navigation. **The reader can hide all code and/or download the RMD file associated with this document by clicking on the Code button on the top right corner of this document.**
+
+
+```{r packages, cache=FALSE}
+if(require(pacman)==FALSE) install.packages("pacman") # check to see if the pacman package is installed; if not install it
+if(require(devtools)==FALSE) install.packages("devtools") # check to see if the devtools package is installed; if not install it
+
+# to check and install if these packages are not found locally on machine
+if(require(albersusa)==FALSE) devtools::install_github('hrbrmstr/albersusa') #install package if needed
+if(require(albersusa)==FALSE) devtools::install_github('dreamRs/r2d3maps') #install package if needed
+
+
+# check if packages are not installed; if yes, install missing packages
+pacman::p_load(tidyverse, magrittr, janitor, dataPreparation, lubridate, skimr, # for data analysis
+               COVID19, rvest, # for extracting relevant data
+               DT, pander, stargazer, # for formatting and nicely printed outputs
+               scales, RColorBrewer, DataExplorer, # for plots
+               plotly, albersusa, r2d3maps, tigris, leaflet, # for maps
+               zoo, fpp2, NbClust, # for TS analysis and clustering
+               VIM, nnet, caret, # explanatory modeling
+               conflicted) # for managing conflicts in functions with same names
+
+# Handling conflicting function names from packages
+conflict_prefer('combine', 'dplyr') # Preferring dplyr::combine over any other package
+conflict_prefer('select', "dplyr") # Preferring dplyr::select over any other package
+conflict_prefer("summarize", "dplyr") # Preferring dplyr::summarize over any other package
+conflict_prefer("filter", "dplyr") # Preferring filter from dplyr
+conflict_prefer("dist", "stats") # Preferring dist from stats
+conflict_prefer("as.dist", "stats") # Preferring as.dist from stats
+
+# Custom Functions
+source('custom_functions.R')
+
+# Setting the seed
+set.seed(2020) # to assist with reproducibility
+sInfo = sessionInfo() # saving all the packages/functions and session info
+```
+
+
+# Extracting the Datasets
+
+For our analysis, we fuse data from multiple sources. We describe the process of obtaining and merging each of these sources in the subsections below.
+
+## Time Series Data
+
+In this section, we utilize the [COVID19 package](https://cran.r-project.org/web/packages/COVID19/COVID19.pdf) to obtain the following information: [@guidotti2020]  
+  - **Confirmed cases, recoveries and deaths**;  
+  - **Policy information** (e.g., transport closing, school closing, closing event, movement restrictions, testing policies, and contact tracing); and  
+  - **Population and standard geographic information** for each county.  
+  
+From this information, we have also computed the new daily and weekly confirmed cases/deaths per county. The data is stored in a tidy format, but can be expanded to a wide format using `pivot_wider()` from the [tidyverse package](https://www.tidyverse.org/).
+
+```{r counties}
+endDate = '2020-10-31'
+endDatePrintV = format(ymd(endDate), format = "%b %d, %Y")
+
+counties = covid19(country = "US", 
+                   level = 3, # for county
+                   start = "2020-03-01", # First Sunday in March
+                   end = endDate, # end Date 
+                   raw = FALSE, # to ensure that all counties have the same grid of dates
+                   amr = NULL, # we are not using the apple mobility data for our analysis
+                   gmr = NULL, # we are not using the Google mobility data for our analysis
+                   wb = NULL, # world bank data not helpful for county level analysis
+                   verbose = FALSE)
+
+counties %<>% # next line removes non-contiguous US states/territories
+  filter(!administrative_area_level_2 %in% c('Alaska', 'Hawaii', 'Puerto Rico', 'Northern Mariana Islands', 'Virgin Islands')) %>% 
+  fastFilterVariables(verbose = FALSE) %>% #dropping invariant columns or bijections
+  filter(!is.na(key_numeric)) %>%  # these are not counties
+  group_by(id) %>% # grouping the data by the id column to make computations correct
+  arrange(id, date) %>% # to ensure correct calculations
+  mutate(day = wday(date, label = TRUE) %>% factor(ordered = F), # day of week
+         newCases = c(NA, diff(confirmed)), # computing new daily cases per county
+         newDeaths = c(NA, diff(deaths)) )  # computing new daily deaths per county
+
+# manually identifying factor variables
+factorVars = c("school_closing", "workplace_closing", "cancel_events",
+               "gatherings_restrictions", "transport_closing", "stay_home_restrictions",
+               "internal_movement_restrictions", "international_movement_restrictions",
+               "information_campaigns", "testing_policy", "contact_tracing")
+
+counties %<>% # converting those variables into character and then factor
+  mutate_at(.vars = vars(any_of(factorVars)), .funs = as.character) %>% 
+  mutate_at(.vars = vars(any_of(factorVars)), .funs = as.factor)
+```
+
+At this stage, we have only read the data based on the covid package. The resulting data is stored at an object titled counties, which contains `r nrow(counties) %>% comma()` observations and `r ncol(counties) %>% comma()` variables. Note that we have filtered observations that do not have a numeric key and removed some columns that do not add any value to future analysis (e.g., invariant cols).
+
+## Cross Sectional Data
+In this analysis, we have extracted the following datasets:  
+
+  (1) The **CDC's Social Vulnerability Index**, where we would utilize the following *four summary theme ranking variables:*    
+    a. **Socioeconomic** – `RPL_THEME1`  
+    b. **Household Composition & Disability** – `RPL_THEME2`   
+    c. **Minority Status & Language** – `RPL_THEME3`  
+    d. **Housing Type & Transportation** – `RPL_THEME4`  
+    Note that each of these indices were computed by the [Centers for Disease Control and Prevention/ Agency for Toxic Substances and Disease Registry/ Geospatial Research, Analysis, and Services Program](https://www.atsdr.cdc.gov/placeandhealth/svi/data_documentation_download.html). The csv file titled: `SVI2018_US_COUNTY.csv` was downloaded on Nov 02, 2020 (click [here](https://www.atsdr.cdc.gov/placeandhealth/svi/data_documentation_download.html) to download the file after selecting `counties` for the *Geography Type* and `CSV File` for the *File type* and clicking *GO*).  
+    
+  (2) We also extracted the following **political and administrative variables**, as of the beginning of the pandemic:  
+    a. **Voting results for all counties in the 2016 Presidential elections:** Based on @DVN/VOQCHQ_2018, we have obtained the 2016 elections data by county, and used the data to compute the percentage of total votes that went to President Trump, with the underlying hypothesis that the politicization of COVID response (e.g., perception/willingness to use face masks, policies and the population’s reaction to the disease) may be explained by party affiliation.  
+    b. **State Governor as of the beginning of the pandemic:** Based on [Wikipedia’s Table of State Governors (click for permanent link to the version we scraped)](https://en.wikipedia.org/w/index.php?title=List_of_United_States_governors&oldid=977828843), we scraped the Governor’s party affiliation since we hypothesized that it may impact the type of policies used on a state-level. Given that the *District of Columbia* does not have a governor, we imputed its value with “Democratic” since D.C.’s Mayor is a Democrat (and DC is not a state).  
+    c. **State's CDC Region Classification:** We have also engineered a region variable based on the [CDC’s 10 Regions Framework](https://www.cdc.gov/coordinatedchronic/docs/nccdphp-regions-map.pdf). While geographic regions are hypothesized to be a factor in disease outbreaks, we chose to utilize the CDC regions specifically based on the following explanation from the aforementioned link: *“CDC’s National Center for Chronic Disease Prevention and Health Promotion (NCCDPHP) is strengthening the consistency and quality of the guidance, communications, and technical assistance provided to states to improve coordination across our state programs”*
+
+```{r extractingData}
+# (1) Obtaining the svi data
+svi <- read_csv("../Data/Input/SVI2018_US_COUNTY.csv") %>% 
+  clean_names() %>% # make everything lower_case
+  select(location, fips, state, county, area_sqmi, e_totpop,
+         rpl_theme1, rpl_theme2, rpl_theme3, rpl_theme4) %>% # columns of interest
+  mutate(e_popdensity = e_totpop/ area_sqmi) %>% # computing population density
+  filter(across(where(is.numeric), ~. >= 0)) %>%  # because NA's are coded as -999
+  filter(!state %in% c('HAWAII', 'ALASKA')) # filtering to contiguous US
+
+
+# (2) Political and Adminstrative Data
+#### (a) 2016 Elections results on a county level
+elections2016 <- read_csv("../Data/Input/countypres_2000-2016.csv") %>% # reading data
+  clean_names() %>% 
+  filter(year == 2016 & party == "republican" & # data for 2016 elections as %republican votes
+         !state %in% c('Alaska', 'Hawaii') ) %>% # contiguous US states only
+  mutate(fips = str_pad(fips, width = 5, side = 'left', pad = '0'), # proper FIPS data
+         percRepVotes = 100*(candidatevotes/totalvotes) ) %>% # computing % republican votes (from total votes)
+  select(fips, percRepVotes)
+
+#### (b) State Governor
+stateGovernor <- "https://en.wikipedia.org/w/index.php?title=List_of_United_States_governors&oldid=977828843" %>%
+  read_html() %>% html_node("table:nth-child(9)") %>% html_table(header = 2, fill = TRUE) # scraping data
+colnames(stateGovernor) <- stateGovernor[1,] %>% tolower() # lower case first row and making it colnames
+stateGovernor <- stateGovernor[-1, c(1,5)] # dropping first row
+stateGovernor$party %<>% recode(`Democratic–Farmer–Labor` = 'Democratic', #replacing  w/ Democratic
+                               `Republican[note 1]` = 'Republican' ) #from Republican[note 1] to Republican
+stateGovernor$state %<>%  toupper() # converting to upper case to match the names in the svi dataset
+stateGovernor[51,] = c('DISTRICT OF COLUMBIA', 'Democratic') # since DC Mayor is a Democrat (DC is not a state)
+
+#### (c) State Region Classification
+cdcRegions = data.frame(state = c('Connecticut', 'Maine', 'Massachusetts', 'New Hampshire', 'Rhode Island' , 
+                                   'Vermont', 'New York', # End of Region A
+                                   'Delaware', 'District of Columbia', 'Maryland', 'Pennsylvania',
+                                   'Virginia', 'West Virginia', 'New Jersey', # End of Region B
+                                   'North Carolina', 'South Carolina', 'Georgia', 'Florida', # Region C
+                                   'Kentucky', 'Tennessee', 'Alabama', 'Mississippi', # Region D
+                                   'Illinois', 'Indiana', 'Michigan', 'Minnesota', 'Ohio',
+                                   'Wisconsin', # End of Region E
+                                   'Arkansas', 'Louisiana', 'New Mexico', 'Oklahoma', 'Texas', # Region F
+                                   'Iowa', 'Kansas', 'Missouri', 'Nebraska', # Region G
+                                   'Colorado', 'Montana', 'North Dakota', 'South Dakota',
+                                   'Utah', 'Wyoming', # End of Region H
+                                   'Arizona', 'California', 'Hawaii', 'Nevada', # Region I
+                                   'Alaska', 'Idaho', 'Oregon', 'Washington' # Region J
+                                   ) %>% toupper(),
+                        region = c(rep('A', 7), rep('B', 7), rep('C', 4),
+                                    rep('D', 4), rep('E', 6), rep('F', 5),
+                                    rep('G', 4), rep('H', 6), rep('I', 4),
+                                    rep('J', 4) ) )
+
+
+# (3) Combining all the potential predictors in a crossSectionDatal Frame
+crossSectionalData <- inner_join(svi, elections2016, by = 'fips') %>% 
+  left_join(stateGovernor, by = 'state') %>% 
+  left_join(cdcRegions, by = 'state')
+
+# saving the results as a RDS File
+saveRDS(crossSectionalData, '../Data/Output/crossSectionalData.rds')
+
+# Tabulating the results and providing a way to export the table to different formats
+datatable(crossSectionalData %>% select(-c(state, county)),
+          extensions = c('FixedColumns', 'Buttons'), options = list(
+            dom = 'Bfrtip',
+            scrollX = TRUE,
+            buttons = c('copy', 'csv', 'excel', 'pdf'),
+            fixedColumns = list(leftColumns = 2))
+          ) %>% 
+  formatRound(columns= c('area_sqmi', 'rpl_theme1', 'rpl_theme2',
+                         'rpl_theme3', 'rpl_theme4', 'e_popdensity', 'percRepVotes'),
+              digits=2)
+```
+
+## Exploratory Analysis
+
+In this section, we perform an exploratory analysis on the data obtained from the multiple sources. 
+
+### Cumulative Cases
+
+```{r cumCases, fig.show='last'}
+noGoogleNAs <- filter(counties, !is.na(key_google_mobility)) # removing NAs from key_google_mobility
+idIndex <- sample(noGoogleNAs$id, 9) # sampling 9 counties by id
+
+# Saving cumulative deaths figure to a png file
+png(filename = '../Figures/sampleCumulativeCases.png',
+    width = 1366, height =768, pointsize = 16)
+counties %>% filter(id %in% idIndex) %>% 
+  ggplot(aes(x = date, y = confirmed, group = id, color = key_google_mobility)) +
+  geom_line(size = 1.25) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  facet_wrap(~ key_google_mobility, scales = 'free_y', ncol = 3) +
+  theme(legend.position = 'none') + 
+  labs(color = '', x = 'Month', y = 'Cumulative Cases By County') +
+  scale_color_brewer(type = 'qual', palette = 'Paired')
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
+
+# Creating an interactive plot for the markdown
+p <- ggplot2::last_plot() + geom_line(size = 0.75) + # modifying the plot for plotly
+  theme_bw(base_size = 9) + theme(legend.position = 'none') # to make margins smaller
+ggplotly(p, height = 768) %>%  layout_ggplotly()
+```
+
+### Cumulative Deaths
+
+```{r cumDeaths, fig.show='last'}
+# Saving cumulative deaths figure to a png file
+png(filename = '../Figures/sampleCumulativeDeaths.png',
+    width = 1366, height =768, pointsize = 16)
+counties %>% filter(id %in% idIndex) %>% 
+  ggplot(aes(x = date, y = deaths, group = id, color = key_google_mobility)) +
+  geom_line(size = 1.25) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  facet_wrap(~ key_google_mobility, scales = 'free_y', ncol = 3) +
+  theme(legend.position = 'none') + 
+  labs(color = '', x = 'Month', y = 'Cumulative Deaths By County') +
+  scale_color_brewer(type = 'qual', palette = 'Paired')
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
+
+# Creating an interactive plot for the markdown
+p <- ggplot2::last_plot() + geom_line(size = 0.75) + # modifying the plot for plotly
+  theme_bw(base_size = 9) + theme(legend.position = 'none') # to make margins smaller
+ggplotly(p, height = 768) %>%  layout_ggplotly()
+```
+
+### RPL Theme 1
+```{r rpl1Map, fig.height=1, results='asis'}
+# Retrieving the U.S. county composite map as a simplefeature
+cty_sf <- counties_sf("longlat") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
+cty_sf %<>% geo_join(crossSectionalData, by_sp= 'fips', by_df= 'fips')
+
+# Creating an interactive d3 map
+d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
+  add_continuous_breaks(var = "rpl_theme1", palette = "Greens", direction = -1) %>%
+  add_tooltip(value = paste("<b>{name}</b> : RPL Theme 1", "{rpl_theme1}")) %>% 
+  add_legend(title = "RPL Theme 1: Percentile Ranking of Counties") %>%
+  add_labs(caption = "Data: CDC’s Social Vulnerability Index Database 2018 U.S.")
+  
+# Saving a static version of the figure
+r2d3::save_d3_png(d3map, file = '../Figures/rplTheme1Map.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+d3map # printing it out
+```
+
+### RPL Theme 2
+```{r rpl2Map, fig.height=1, results='asis'}
+# Creating an interactive d3 map
+d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
+  add_continuous_breaks(var = "rpl_theme2", palette = "Greens", direction = -1) %>%
+  add_tooltip(value = paste("<b>{name}</b> : RPL Theme 2", "{rpl_theme2}")) %>% 
+  add_legend(title = "RPL Theme 2: Percentile Ranking of Counties") %>%
+  add_labs(caption = "Data: CDC’s Social Vulnerability Index Database 2018 U.S.")
+  
+# Saving a static version of the figure
+r2d3::save_d3_png(d3map, file = '../Figures/rplTheme2Map.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+d3map # printing it out
+```
+
+### RPL Theme 3
+```{r rpl3Map, fig.height=1, results='asis'}
+# Creating an interactive d3 map
+d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
+  add_continuous_breaks(var = "rpl_theme3", palette = "Greens", direction = -1) %>%
+  add_tooltip(value = paste("<b>{name}</b> : RPL Theme 3", "{rpl_theme3}")) %>% 
+  add_legend(title = "RPL Theme 3: Percentile Ranking of Counties") %>%
+  add_labs(caption = "Data: CDC’s Social Vulnerability Index Database 2018 U.S.")
+  
+# Saving a static version of the figure
+r2d3::save_d3_png(d3map, file = '../Figures/rplTheme3Map.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+d3map # printing it out
+```
+
+### RPL Theme 4
+```{r rpl4Map, fig.height=1, results='asis'}
+# Creating an interactive d3 map
+d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
+  add_continuous_breaks(var = "rpl_theme4", palette = "Greens", direction = -1) %>%
+  add_tooltip(value = paste("<b>{name}</b> : RPL Theme 4", "{rpl_theme4}")) %>% 
+  add_legend(title = "RPL Theme 4: Percentile Ranking of Counties") %>%
+  add_labs(caption = "Data: CDC’s Social Vulnerability Index Database 2018 U.S.")
+  
+# Saving a static version of the figure
+r2d3::save_d3_png(d3map, file = '../Figures/rplTheme4Map.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+d3map # printing it out
+```
+
+
+### Percent Republican Vote
+```{r percRepVotesMap, fig.height=1, results='asis'}
+# Creating an interactive d3 map
+d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
+  add_continuous_gradient2(var = "percRepVotes", low = '#2166AC', mid = '#F7F7F7', high = '#B2182B',
+                           range = c(0, 50, 100)) %>%
+  add_tooltip(value = paste("<b>{name}</b> : Percent Republican Votes in 2016 Presidential Elections", "{percRepVotes}")) %>% 
+  add_legend(title = "Percent Republican Votes in 2016 Presidential Election", suffix = "%") %>%
+  add_labs(caption = "Data: Election Data Archive Dataverse (Harvard University)")
+  
+# Saving a static version of the figure
+r2d3::save_d3_png(d3map, file = '../Figures/percRepVotesMap.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+d3map # printing it out
+```
+
+### CDC Regions
+```{r cdcMap, fig.height=1, results='asis'}
+crossSectionalData$state %<>% tolower() %>% tools::toTitleCase()
+# Retrieving the U.S. state composite map as a simplefeature
+state_sf <- usa_sf("longlat") %>% filter(!name %in% c('Alaska', 'Hawaii')) # from albersua
+state_sf %<>% geo_join(crossSectionalData, by_sp= 'name', by_df= 'state')
+
+# Creating an interactive d3 map
+d3map <- d3_map(shape = arrange(state_sf, region), projection = "Albers") %>%
+  add_discrete_scale(var = "region", palette = "Paired") %>%
+  add_tooltip(value = paste("<b>{name}</b> : CDC Region", "{region}")) %>% 
+  add_legend(title = "Region") %>%
+  add_labs(caption = "Data: CDC’s National Center for Chronic Disease Prevention and Health Promotion")
+  
+# Saving a static version of the figure
+r2d3::save_d3_png(d3map, file = '../Figures/cdcMap.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+d3map # printing it out
+```
+
+### Governor's Party Prior to November Elections
+```{r govMap, fig.height=1, results='asis'}
+# Creating an interactive d3 map
+d3map <- d3_map(shape = arrange(state_sf, region), projection = "Albers") %>%
+  add_discrete_scale2(var = "party", values = list('Democratic' = '#1F78B4',
+                                                   'Republican' = '#E31A1C')) %>%
+  add_tooltip(value = paste("<b>{name}</b> \n Governor's Party:", "{party}")) %>% 
+  add_legend(title = "Gov. Party") %>%
+  add_labs(caption = paste0("Data: Wikipedia (as of ", endDatePrintV, ")"))
+  
+# Saving a static version of the figure
+r2d3::save_d3_png(d3map, file = '../Figures/governorsMap.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+d3map # printing it out
+```
+
+# Time-Series Clustering 
+
+It is important to note that, in our estimation, there are three important decisions to be made when performing time-series clustering:  
+
+  - *Preparation of the Different Time-Series to be Clustered*  In this section, we have (a) selected the new daily deaths per county as the primary variable of interest, (b) smoothed that variable using a seven-day moving average, and (c) scaled the observations within each county’s 7-day MA of new daily deaths such that it is bounded between 0 and 1. This allows us to compare the **shape** of the time-series/profile across counties of different populations and where the magnitude of the deaths is quite different.
+  
+  - *Choice of Distance Measure: The Euclidean distance*, The Euclidean Distance i.e., the $l_2$ norm, is the most commonly used distance measure since it is computationally efficient. However, it may not be suitable for applications where the time-series are of different length in addition to being sensitive to noise, scale and time shifts (Sardá-Espinosa, 2017).  
+  
+  - *Choice of Clustering Algorithm:* A large number of clustering algorithms have been proposed in the literature. Most common clustering approaches are shape-based, which include $k-$means clustering and hierarchical clustering. The reader is referred to @aghabozorgi2015time for a detailed review. In our preliminary analysis, we have chosen to use the hierarchical clustering approach since it provides an easy to understand dendogram and the number of counties was small. However, in our full analysis, we will use the $k-$means clustering algorithm since it is computationally efficient. Furthermore, we overcame the traditional limitation of having to pre-specify $k$ by utilizing 26 indexes for determining the optimal number of clusters in a data set based on the excellent approach and package implementation of @charrad2014NbClust.
+
+
+## Data Preparation
+
+```{r dataPrepClustering}
+clusteringPrep <- counties %>% # from the counties
+  select(id, date, key_google_mobility, newDeaths) %>% # selecting minimal amount of cols for visual inspection
+  arrange(id, date) %>% # arranged to ensure correct calculations
+  mutate(newMA7 = rollmeanr(newDeaths, k = 7, fill = NA), # 7-day ma of new (adjusted) deaths
+         maxMA7 = max(newMA7, na.rm = T), # obtaining the max per county to scale data
+         scaledNewMA7 = pmax(0, newMA7/maxMA7, na.rm = TRUE) ) %>% # scaling data to a 0-1 scale by county
+  select(id, key_google_mobility, date, scaledNewMA7) %>% # dropping the variable newDeaths
+  pivot_wider(names_from = date, values_from = scaledNewMA7) # converting the data to a wide format for clustering
+
+constantColumns  <- whichAreConstant(clusteringPrep, verbose = F) # identifying constant columns
+datesDropped <- colnames(clusteringPrep)[constantColumns] # used for printing the names after the code chunk
+
+clusteringPrep %<>% select(-all_of(constantColumns) ) %>%  # speeds up clustering by dec length of series
+  as.data.frame() # data needs to be data frame for clustering
+row.names(clusteringPrep) = clusteringPrep[,1] # needed for tsclust
+clusteringPrep = clusteringPrep[,-1] # dropping the id column since it is now row.name
+```
+
+The following dates were removed from our data frame since the `scaledNEWMA7` variable was constant across all counties: `r pander(datesDropped, compact = TRUE)`.
+
+
+## Clustering Contiguous U.S. Counties
+
+```{r tsClustering, fig.show='hide'}
+clusteringPrep %<>% select(-c(key_google_mobility))  # removing this variable so we can cluster
+
+nc  <- NbClust(clusteringPrep, distance = "euclidean", # euclidean distance
+             min.nc = 2, max.nc = 50, # searching for optimal k between k=2 and k=50
+             method = "kmeans", # using the k-means method
+             index = "all") # using 26 of the 30 indices in the package
+
+kclus  <- nc$Best.partition %>% as.data.frame() %>% #obtaining the best partition/ cluster assignment for optimal k
+  rename(., cluster_group = .) %>% rownames_to_column("County") 
+
+#converting the wide to tall data and adding the cluster groupings
+clusters  <- clusteringPrep %>% 
+  rownames_to_column(var = "County") %>% 
+  pivot_longer(cols = starts_with("2020"), names_to = "Date") %>% 
+  inner_join(., kclus, by = "County") %>% 
+  mutate(cluster_group = as.factor(cluster_group))
+
+idClusters  <- clusters %>% select(c(County, cluster_group)) # creating a look-up table of county and cluster group
+colnames(idClusters)  <- c('id', 'cluster_group') # renaming the columns
+idClusters %<>%  unique() #removing the duplicates due to different dates (we had that to ensure that the clustering was applied correctly)
+
+# Adding Cluster Grouping to a subset of the counties data frame
+clusterCounties <- counties %>% 
+  select(c(id, key_numeric, key_google_mobility, administrative_area_level_2, administrative_area_level_3)) %>% 
+  inner_join(., idClusters, by ='id') %>% 
+  mutate(cluster_group = paste0('C', cluster_group)) %>% 
+  unique()
+
+# saving the results as a RDS File
+saveRDS(clusterCounties, '../Data/Output/clusterCounties.rds')
+```
+
+
+## Visualizing the Clustering Results
+
+In this subsection, we provide three plots:  
+
+  - A paneled spaghetti plot, highlighting the median scaled time-series for profile for each cluster;  
+  - A panel plot where the first, second and third quartiles of the scaled time-series for each cluster are compared; and  
+  - An interactive chloropleth maps to visualize the spatial distribution of the clusters, where the reader can click on a given county to show: (a) county name, (b) assigned cluster, (c) population density, and (d) percentage of residents in poverty.
+
+
+### Spaghetti Plot
+
+```{r spaghetti, fig.show='last'}
+spaghettiDF <- counties %>% # from the counties
+  select(id, date, newDeaths, key_google_mobility) %>% # selecting minimal columns
+  left_join(clusterCounties[, c('id', 'cluster_group')], by = 'id') %>% # to get clusters
+  arrange(id, date) %>% # arranged to ensure correct calculations
+  mutate(newMA7 = rollmeanr(newDeaths, k = 7, fill = NA), # 7-day ma of new (adjusted) deaths
+         maxMA7 = max(newMA7, na.rm = T), # obtaining the max per county to scale data
+         scaledNewMA7 = pmax(0, newMA7/maxMA7, na.rm = TRUE) ) %>% 
+  ungroup() %>% select(date, cluster_group, scaledNewMA7, key_google_mobility) %>% 
+  group_by(date, cluster_group)
+
+# Creating a Named Color Scale
+colorPal <-  brewer.pal(n= levels(spaghettiDF$cluster_group) %>% length(), 'Set2')
+names(colorPal) <- levels(spaghettiDF$cluster_group)
+
+# Saving spaghetti plot to a png file
+png(filename = '../Figures/spaghettiPlot.png', width = 1366, height =768, pointsize = 16)
+spaghettiDF %>%  
+  ggplot(aes(x = date, y = scaledNewMA7, color = cluster_group, group = key_google_mobility)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  geom_line(size = 0.25, alpha = 0.1) +
+  stat_summary(aes(group = 1), 
+               fun= median,
+               geom = "line",
+               size = 1.25, col = 'black') + 
+  facet_wrap(~ cluster_group, ncol = 1) +
+  theme(legend.position = 'none') + 
+  labs(x = 'Month', y = 'Scaled New Deaths By Cluster By Day',
+       caption = paste0('Solid black line represents the median for each cluster | 
+       Based on Data from March 01, 2020 - ', endDatePrintV) )  +
+  scale_color_manual(values = colorPal)
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
+
+# Creating an interactive plot for the markdown
+p <- ggplot2::last_plot() + geom_line(size = 0.25, alpha = 0.1) + # modifying the plot for plotly
+  theme_bw(base_size = 9) + theme(legend.position = 'none') # to make margins smaller
+ggplotly(p, height = 768) %>%  layout_ggplotly()
+```
+
+
+### Summary Plot
+```{r summaryPlot, fig.show='last'}
+# Creating a data frame containing statistical summaries of the time series by cluster_group
+summaryDf <- spaghettiDF %>% 
+  summarise(Median = median(scaledNewMA7, na.rm= TRUE),
+            `First Quartile` = quantile(scaledNewMA7, probs = 0.25, na.rm= TRUE),
+            `Third Quartile` = quantile(scaledNewMA7, probs = 0.75, na.rm= TRUE)) %>% 
+  pivot_longer(cols = c(`First Quartile`, Median, `Third Quartile`),
+                        names_to = 'Statistic')
+
+png(filename = '../Figures/summaryPlot.png', width = 1366, height =768, pointsize = 16)
+summaryDf %>% 
+  ggplot(aes(x = date, y = value, color = cluster_group, linetype =  Statistic)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  geom_line(size = 1.25) +
+   scale_linetype_manual(values = c('dotted', 'solid', 'twodash')) +
+  facet_wrap(~ cluster_group, ncol = 1) +
+  theme(legend.position = 'top') + 
+  labs(color = '', x = 'Month', y = 'Quartiles of Scaled New Deaths By Cluster By Day') +
+  scale_color_manual(values = colorPal)
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
+
+# Creating an interactive plot for the markdown
+p <- ggplot2::last_plot() + # modifying the plot for plotly
+  theme_bw(base_size = 9)  # to make margins smaller
+ggplotly(p, height = 768) %>% layout_ggplotly()
+```
+
+### Cluster Map
+
+```{r clusterMap, out.width='100%'}
+# Joining the clusterCounties results with the existing county simple features object (cty_sf)
+clusterCounties$fips <- str_pad(clusterCounties$key_numeric, width = 5, side = 'left', pad = '0')
+clusterCounties %<>% ungroup()
+cty_sf %<>% left_join(clusterCounties[, c('fips', 'cluster_group')], by = 'fips') # adding cluster_group to cty_sf
+
+# Creating a static visual for the paper
+d3map <- d3_map(shape = arrange(cty_sf, cluster_group), projection = "Albers") %>%
+  add_discrete_scale2(var = "cluster_group", values = colorPal) %>%
+  add_tooltip(value = paste("<b>{name}</b> : Cluster #", "{cluster_group}")) %>% 
+  add_legend(title = "Cluster")
+
+r2d3::save_d3_png(d3map, file = '../Figures/clusterMap.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+# Creating an interactive visual Using the Leaflet Package
+#### Setting the Color Scheme
+leafletPal <-  colorFactor('Set2', domain = cty_sf$cluster_group, na.color = "white")
+
+#### The visual
+leaflet(height=500) %>% # initializing the leaflet map
+  setView(lng = -96, lat = 37.8, zoom = 3.8) %>% # setting the view on Continental US
+  addTiles() %>% # adding the default tiles
+  addPolygons(data = cty_sf, stroke = FALSE, fillColor = ~leafletPal(cty_sf$cluster_group), # adding the data
+              weight = 2, opacity = 1, color = "white", dashArray = "3", fillOpacity = 0.7, # adding color specs
+              popup = paste("County:", cty_sf$name, '<br>', 
+                            "Cluster #:", cty_sf$cluster_group, '<br>',
+                            "Population Density:", round(cty_sf$e_popdensity, 1), '<br>')) %>% #pop-up Menu
+  addLegend(position = "bottomleft", pal = leafletPal, values =  cty_sf$cluster_group, 
+            title = "Cluster #", opacity = 1) # legend formatting
+```
+
+
+# Explanatory Modeling of Cluster Assignments 
+
+In the previous section, we showed that by using solely a scaled and smoothed time series of daily deaths per county, the counties are grouped into `r unique(cty_sf$cluster_group) %>% na.omit() %>% length()` categories (whose time-series have distinct shapes based on the Euclidean distance measure). In this section, we attempt to model the factors that are associated with the cluster assignment.
+
+## Descriptive Statistics
+
+### Skimming the Data
+
+```{r skim, out.width='100%', results='asis'}
+# Combining multiClass response with potential predictors
+multiClassDF <- select(clusterCounties, fips, cluster_group) %>% 
+  left_join(crossSectionalData, by = 'fips')  %>% 
+  select(-c(e_totpop, area_sqmi, state, county))
+
+saveRDS(multiClassDF, '../Data/Output/multiClassDF.rds') # saving the data
+
+skim(multiClassDF) # printing a nice summary table of the data
+```
+
+### Correlation Plot Among Continuous Predictors
+
+```{r corrPlot}
+png(filename = '../Figures/corrPlot.png',
+    width = 1366, height =768, pointsize = 16)
+na.omit(multiClassDF) %>% 
+  plot_correlation(ggtheme = theme_bw(), type = 'c')  # compute corr among only continuous vars
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
+
+ggplot2::last_plot()
+```
+
+### Boxplot By Cluster
+
+```{r boxPlot}
+# Saving cumulative deaths figure to a png file
+png(filename = '../Figures/boxPlot.png',
+    width = 1366, height =768, pointsize = 16)
+multiClassDF %>% 
+  plot_boxplot(by = 'cluster_group', ncol = 2L, 
+               ggtheme = theme_bw(),
+               geom_boxplot_args = list('outlier.shape' = 1))
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
+
+# Creating an interactive plot for the markdown
+p <- ggplot2::last_plot()
+ggplotly(p, height = 768) %>%  layout_ggplotly()
+```
+
+
+
+## Explanatory Modeling Using Multinomial Regression
+
+### Model Building
+
+```{r multinom}
+df <- multiClassDF %>% select(-c(fips, location)) %>% 
+  mutate(cluster_group = as.factor(cluster_group))
+
+# setting the reference level to category with max frequency
+df$clustReLeveled <-  relevel(df$cluster_group, ref = maxCat(df$cluster_group) )
+df  <-  df %>% select(-c(cluster_group)) # removed since we created a reLeveled version and stored it in a diff va
+
+finalModel <-  multinom(clustReLeveled ~ ., data = df) # create model
+```
+
+### Resulting Model
+```{r multiModel2, results='asis'}
+# Saving the results as a latex table, but not printing it out in the Markdown document
+invisible(stargazer(finalModel, type = 'latex', p.auto = FALSE, out="../Data/Output/multi.tex", 
+                    single.row = TRUE, header = FALSE))
+
+# tabulating model results as an HTML, which we print below
+stargazer(finalModel, type = 'html', p.auto = FALSE, out="../Data/Output/multi.html", single.row = TRUE)
+```
+
+### Model's Performance
+```{r predictivePerformance}
+# examining how well the model performed on our entire dataset
+# Recall that we are fitting an explanatory model, and not a predictive model
+predictedClass <- predict(finalModel, df)
+
+# Computing the Confusion Metrics and By Class Metrics
+confMatrix = confusionMatrix(predictedClass, df$clustReLeveled)
+saveRDS(confMatrix, '../Data/Output/confMatrix.rds') # saving the data
+
+# Printing the Resulting Tables Nicely
+pander(confMatrix$table)
+pander(confMatrix$byClass)
+pander(confMatrix$overall)
+```
+
+
+### Visualizing the Model's Predictions
+
+```{r clusterMatch}
+predictedProbs <- fitted(finalModel) # computing predicted probabilities for each of the cluster outcome levels
+mapResults <- cbind(na.omit(multiClassDF), predictedProbs) # col binding predProbs for Each Cluster with multiClassDF
+
+# Finding indices to subset the data
+numberOfClusters <- unique(mapResults$cluster_group) %>% as.character() %>% length() 
+startCol <- ncol(mapResults) - numberOfClusters + 1
+endCol <- ncol(mapResults)
+
+# Finding whether the predicted and actual clusters matched for each county
+mapResults$LargestProbCluster <- colnames(mapResults[, startCol:endCol])[apply(mapResults[, startCol:endCol], 1, which.max)] 
+mapResults$match <- ifelse(mapResults$cluster_group == mapResults$LargestProbCluster, 'Yes', 'No') %>% as.factor()
+
+# Retrieving the U.S. county composite map as a simplefeature (since it has been overwritten)
+cty_sf <- counties_sf("longlat") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
+cty_sf %<>% geo_join(mapResults, by_sp= 'fips', by_df= 'fips')
+
+# Creating a static visual for the paper
+d3map <- d3_map(shape = arrange(cty_sf, match), projection = "Albers") %>%
+  add_discrete_scale2(var = "match", 
+                      values = list("Yes" = "#CAB2D6", "No" = "#6A3D9A"),
+                      na_color = 'white') %>%
+  add_tooltip(value = paste("<b>{name}</b> : Match", "{match}")) %>% 
+  add_legend(title = "Match")
+
+r2d3::save_d3_png(d3map, file = '../Figures/clusterMatchMap.png', 
+                  width = 1366, height =768, zoom = 1, delay = 3) 
+
+# Creating an interactive visual Using the Leaflet Package
+#### Setting the Color Scheme
+leafletPal <-  colorFactor(palette = c("#CAB2D6", "#6A3D9A"), levels = c('Yes', 'No'), na.color = "white")
+
+#### The visual
+leaflet(height=500) %>% # initializing the leaflet map
+  setView(lng = -96, lat = 37.8, zoom = 3.8) %>% # setting the view on Continental US
+  addTiles() %>% # adding the default tiles
+  addPolygons(data = cty_sf, stroke = FALSE, fillColor = ~leafletPal(cty_sf$match), # adding the data
+              weight = 2, opacity = 1, color = "white", dashArray = "3", fillOpacity = 0.7, # adding color specs
+              popup = paste("County:", cty_sf$name, '<br>', 
+                            "Cluster #:", cty_sf$cluster_group, '<br>',
+                            "Cluster Predicted:", cty_sf$LargestProbCluster, '<br>',
+                            "Cluster Match:", cty_sf$match, '<br>')) %>% #pop-up Menu
+  addLegend(position = "bottomleft", pal = leafletPal, values =  cty_sf$match, 
+            title = "Cluster Match", opacity = 1) # legend formatting
+```
+
+
+# Concluding Remarks
+In this R Markdown document, we have shown that our proposed two stage framework for modeling the smoothed and scaled time series of new daily cases can provide insights into the shape of the outbreak's time-series and some of its associated factors. Specifically, we have shown that:  
+
+- On a county-level, the time series of COVID-19 new daily cases can be clustered into `r unique(mapResults$cluster_group) %>% length()` clusters.  
+
+- Using a multinomial regression model, we have shown/quantified the impact of the following factors: `r select(multiClassDF, -c(fips, cluster_group, location)) %>% colnames() %>% pander()` on the odds of being in a specific cluster when compared to the baseline.
+
+
+---
+
+# References
+<div id="refs"></div>
+
+---
+
+# Appendices
+
+## Session Info
+In this appendix, we print all the R packages used in our analysis and their versions to assist with reproducing our results/analysis.
+
+```{r sessionInfo}
+pander(sessionInfo(), compact = TRUE)
+```
+
+## Removing White Space in Static Maps
+In this appendix, we have written a short script to remove the automatically generated white space from the `save_d3_png()` function. To do this, we have capitalized on the [magick package](https://cran.r-project.org/web/packages/magick/vignettes/intro.html). Obviously, the reader does not need to run this code; however, we are adding it here for the sake of completion given that the trimmed figures are what we are planning to add to our submitted manuscripts.
+
+```{r trimImageMargins}
+# This chunk of code is written, but not included in the HTML output
+# Its sole purpose is to trim white space in all the generated d3 static maps
+pacman::p_load(magick)
+imageFiles <- list.files(path='../Figures/', pattern='Map.png', full.names = TRUE)
+for (i in 1:length(imageFiles)) {
+image_read(imageFiles[i]) %>% # reading all images with the suffix Map.png
+    image_trim() %>% # capitalizing on the auto-cropping functionality from the magick package
+    image_write(path = paste0(str_sub(imageFiles[i], start=1, end=-5), '_trimmed.png'), 
+                format = 'png')  # save trimmed image to png in the same directory with _trimmed in name
+}
+```
