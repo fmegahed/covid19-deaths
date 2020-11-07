@@ -273,15 +273,13 @@ ggplotly(p, height = 768) %>%  layout_ggplotly()
 ```
 
 ### RPL Theme 1
-```{r rpl1Map, fig.height=1, results='asis'}
+```{r rpl1Map}
 # Retrieving the U.S. county composite map as a simplefeature
 cty_sf <- counties_sf("longlat") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
 cty_sf %<>% geo_join(crossSectionalData, by_sp= 'fips', by_df= 'fips')
 
-# Creating an interactive d3 map
 d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
   add_continuous_breaks(var = "rpl_theme1", palette = "Greens", direction = -1) %>%
-  add_tooltip(value = paste("<b>{name}</b> : RPL Theme 1", "{rpl_theme1}")) %>% 
   add_legend(title = "RPL Theme 1: Percentile Ranking of Counties") %>%
   add_labs(caption = "Data: CDC’s Social Vulnerability Index Database 2018 U.S.")
   
@@ -289,15 +287,14 @@ d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
 r2d3::save_d3_png(d3map, file = '../Figures/rplTheme1Map.png', 
                   width = 1366, height =768, zoom = 1, delay = 3) 
 
-d3map # printing it out
+# Printing the static version of the map
+knitr::include_graphics('../Figures/rplTheme1Map.png')
 ```
 
 ### RPL Theme 2
-```{r rpl2Map, fig.height=1, results='asis'}
-# Creating an interactive d3 map
+```{r rpl2Map}
 d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
   add_continuous_breaks(var = "rpl_theme2", palette = "Greens", direction = -1) %>%
-  add_tooltip(value = paste("<b>{name}</b> : RPL Theme 2", "{rpl_theme2}")) %>% 
   add_legend(title = "RPL Theme 2: Percentile Ranking of Counties") %>%
   add_labs(caption = "Data: CDC’s Social Vulnerability Index Database 2018 U.S.")
   
@@ -305,15 +302,14 @@ d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
 r2d3::save_d3_png(d3map, file = '../Figures/rplTheme2Map.png', 
                   width = 1366, height =768, zoom = 1, delay = 3) 
 
-d3map # printing it out
+# Printing the static version of the map
+knitr::include_graphics('../Figures/rplTheme2Map.png')
 ```
 
 ### RPL Theme 3
-```{r rpl3Map, fig.height=1, results='asis'}
-# Creating an interactive d3 map
+```{r rpl3Map}
 d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
-  add_continuous_breaks(var = "rpl_theme3", palette = "Greens", direction = -1) %>%
-  add_tooltip(value = paste("<b>{name}</b> : RPL Theme 3", "{rpl_theme3}")) %>% 
+  add_continuous_breaks(var = "rpl_theme3", palette = "Greens", direction = -1) %>% 
   add_legend(title = "RPL Theme 3: Percentile Ranking of Counties") %>%
   add_labs(caption = "Data: CDC’s Social Vulnerability Index Database 2018 U.S.")
   
@@ -321,15 +317,14 @@ d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
 r2d3::save_d3_png(d3map, file = '../Figures/rplTheme3Map.png', 
                   width = 1366, height =768, zoom = 1, delay = 3) 
 
-d3map # printing it out
+# Printing the static version of the map
+knitr::include_graphics('../Figures/rplTheme3Map.png')
 ```
 
 ### RPL Theme 4
-```{r rpl4Map, fig.height=1, results='asis'}
-# Creating an interactive d3 map
+```{r rpl4Map}
 d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
   add_continuous_breaks(var = "rpl_theme4", palette = "Greens", direction = -1) %>%
-  add_tooltip(value = paste("<b>{name}</b> : RPL Theme 4", "{rpl_theme4}")) %>% 
   add_legend(title = "RPL Theme 4: Percentile Ranking of Counties") %>%
   add_labs(caption = "Data: CDC’s Social Vulnerability Index Database 2018 U.S.")
   
@@ -337,17 +332,16 @@ d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
 r2d3::save_d3_png(d3map, file = '../Figures/rplTheme4Map.png', 
                   width = 1366, height =768, zoom = 1, delay = 3) 
 
-d3map # printing it out
+# Printing the static version of the map
+knitr::include_graphics('../Figures/rplTheme4Map.png')
 ```
 
 
 ### Percent Republican Vote
-```{r percRepVotesMap, fig.height=1, results='asis'}
-# Creating an interactive d3 map
+```{r percRepVotesMap}
 d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
   add_continuous_gradient2(var = "percRepVotes", low = '#2166AC', mid = '#F7F7F7', high = '#B2182B',
                            range = c(0, 50, 100)) %>%
-  add_tooltip(value = paste("<b>{name}</b> : Percent Republican Votes in 2016 Presidential Elections", "{percRepVotes}")) %>% 
   add_legend(title = "Percent Republican Votes in 2016 Presidential Election", suffix = "%") %>%
   add_labs(caption = "Data: Election Data Archive Dataverse (Harvard University)")
   
@@ -355,20 +349,19 @@ d3map <- d3_map(shape = arrange(cty_sf, region), projection = "Albers") %>%
 r2d3::save_d3_png(d3map, file = '../Figures/percRepVotesMap.png', 
                   width = 1366, height =768, zoom = 1, delay = 3) 
 
-d3map # printing it out
+# Printing the static version of the map
+knitr::include_graphics('../Figures/percRepVotesMap.png')
 ```
 
 ### CDC Regions
-```{r cdcMap, fig.height=1, results='asis'}
+```{r cdcMap}
 crossSectionalData$state %<>% tolower() %>% tools::toTitleCase()
 # Retrieving the U.S. state composite map as a simplefeature
 state_sf <- usa_sf("longlat") %>% filter(!name %in% c('Alaska', 'Hawaii')) # from albersua
 state_sf %<>% geo_join(crossSectionalData, by_sp= 'name', by_df= 'state')
 
-# Creating an interactive d3 map
 d3map <- d3_map(shape = arrange(state_sf, region), projection = "Albers") %>%
   add_discrete_scale(var = "region", palette = "Paired") %>%
-  add_tooltip(value = paste("<b>{name}</b> : CDC Region", "{region}")) %>% 
   add_legend(title = "Region") %>%
   add_labs(caption = "Data: CDC’s National Center for Chronic Disease Prevention and Health Promotion")
   
@@ -376,12 +369,12 @@ d3map <- d3_map(shape = arrange(state_sf, region), projection = "Albers") %>%
 r2d3::save_d3_png(d3map, file = '../Figures/cdcMap.png', 
                   width = 1366, height =768, zoom = 1, delay = 3) 
 
-d3map # printing it out
+# Printing the static version of the map
+knitr::include_graphics('../Figures/cdcMap.png')
 ```
 
 ### Governor's Party Prior to November Elections
-```{r govMap, fig.height=1, results='asis'}
-# Creating an interactive d3 map
+```{r govMap}
 d3map <- d3_map(shape = arrange(state_sf, region), projection = "Albers") %>%
   add_discrete_scale2(var = "party", values = list('Democratic' = '#1F78B4',
                                                    'Republican' = '#E31A1C')) %>%
@@ -393,7 +386,7 @@ d3map <- d3_map(shape = arrange(state_sf, region), projection = "Albers") %>%
 r2d3::save_d3_png(d3map, file = '../Figures/governorsMap.png', 
                   width = 1366, height =768, zoom = 1, delay = 3) 
 
-d3map # printing it out
+knitr::include_graphics('../Figures/governorsMap.png')
 ```
 
 # Time-Series Clustering 
@@ -624,9 +617,7 @@ multiClassDF %>%
                geom_boxplot_args = list('outlier.shape' = 1))
 invisible( dev.off() ) # to suppress the unwanted output from dev.off
 
-# Creating an interactive plot for the markdown
-p <- ggplot2::last_plot()
-ggplotly(p, height = 768) %>%  layout_ggplotly()
+ggplot2::last_plot()
 ```
 
 
@@ -653,7 +644,7 @@ invisible(stargazer(finalModel, type = 'latex', p.auto = FALSE, out="../Data/Out
                     single.row = TRUE, header = FALSE))
 
 # tabulating model results as an HTML, which we print below
-stargazer(finalModel, type = 'html', p.auto = FALSE, out="../Data/Output/multi.html", single.row = TRUE)
+stargazer(finalModel, type = 'html', p.auto = FALSE, out="../Data/Output/multi.html", single.row = FALSE)
 ```
 
 ### Model's Performance
