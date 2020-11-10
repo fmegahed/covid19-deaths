@@ -30,20 +30,18 @@ knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
                       progress = FALSE, 
                       verbose = FALSE,
-                      dpi = 300,
+                      dpi = 600,
                       out.width = '100%')
 options(qwraps2_markup = "markdown")
 
 library(ggplot2); theme_set(theme_bw(base_size = 16, base_family = "Arial")) # setting the preferred ggplot theme to bw
-default_sizing = function(){r2d3::sizingPolicy(padding = 0, browser.padding = 0, browser.fill = TRUE)}
-par(mar = c(0,0,0,0), xaxs="i", yaxs="i")
 ```
 
 
 # R Setup and Required Packages
 In this project, the open-source R programming language is used to model the progression in the COVID-19 pandemic in different U.S. counties. R is maintained by an international team of developers who make the language available at [The Comprehensive R Archive Network](https://cran.r-project.org/). Readers interested in reusing our code and reproducing our results should have R installed locally on their machines. R can be installed on a number of different operating systems (see [Windows](https://cran.r-project.org/bin/windows/), [Mac](https://cran.r-project.org/bin/macosx/), and [Linux](https://cran.r-project.org/bin/linux/) for the installation instructions for these systems). We also recommend using the RStudio interface for R. The reader can [download RStudio](http://www.rstudio.com/ide) for free by following the instructions at the link. For non-R users, we recommend the [Hands-on Programming with R](https://rstudio-education.github.io/hopr/packages.html) for a brief overview of the software's functionality. Hereafter, we assume that the reader has an introductory understanding of the R programming language.
 
-In the code chunk below, we load the packages used to support our analysis. Note that the code of this and any of the code chunks can be hidden by clicking on the 'Hide' button to facilitate the navigation. **The reader can hide all code and/or download the RMD file associated with this document by clicking on the Code button on the top right corner of this document.**
+In the code chunk below, we load the packages used to support our analysis. Note that the code of this and any of the code chunks can be hidden by clicking on the 'Hide' button to facilitate the navigation. **The reader can hide all code and/or download the RMD file associated with this document by clicking on the Code button on the top right corner of this document.** Our input and output files can also be accessed/ downloaded from [fmegahed/covid19-deaths](https://github.com/fmegahed/covid19-deaths). 
 
 
 ```{r packages, cache=FALSE}
