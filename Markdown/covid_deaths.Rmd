@@ -72,7 +72,7 @@ conflict_prefer("dist", "stats") # Preferring dist from stats
 conflict_prefer("as.dist", "stats") # Preferring as.dist from stats
 
 # Custom Functions
-source('custom_functions.R')
+source_url('https://raw.githubusercontent.com/fmegahed/covid19-deaths/master/Markdown/custom_functions.R')
 
 # Setting the seed
 set.seed(2020) # to assist with reproducibility
@@ -141,13 +141,12 @@ In this analysis, we have extracted the following datasets:
     Note that each of these indices were computed by the [Centers for Disease Control and Prevention/ Agency for Toxic Substances and Disease Registry/ Geospatial Research, Analysis, and Services Program](https://www.atsdr.cdc.gov/placeandhealth/svi/data_documentation_download.html). The csv file titled: `SVI2018_US_COUNTY.csv` was downloaded on Nov 02, 2020 (click [here](https://www.atsdr.cdc.gov/placeandhealth/svi/data_documentation_download.html) to download the file after selecting `counties` for the *Geography Type* and `CSV File` for the *File type* and clicking *GO*).  
     
   (2) We also extracted the following **political and administrative variables**, as of the beginning of the pandemic:  
-    a. **Voting results for all counties in the 2016 Presidential elections:** Based on @DVN/VOQCHQ_2018, we have obtained the 2016 elections data by county, and used the data to compute the percentage of total votes that went to President Trump, with the underlying hypothesis that the politicization of COVID response (e.g., perception/willingness to use face masks, policies and the population’s reaction to the disease) may be explained by party affiliation.  
-    b. **State Governor as of the beginning of the pandemic:** Based on [Wikipedia’s Table of State Governors (click for permanent link to the version we scraped)](https://en.wikipedia.org/w/index.php?title=List_of_United_States_governors&oldid=977828843), we scraped the Governor’s party affiliation since we hypothesized that it may impact the type of policies used on a state-level. Given that the *District of Columbia* does not have a governor, we imputed its value with “Democratic” since D.C.’s Mayor is a Democrat (and DC is not a state).  
-    c. **State's CDC Region Classification:** We have also engineered a region variable based on the [CDC’s 10 Regions Framework](https://www.cdc.gov/coordinatedchronic/docs/nccdphp-regions-map.pdf). While geographic regions are hypothesized to be a factor in disease outbreaks, we chose to utilize the CDC regions specifically based on the following explanation from the aforementioned link: *“CDC’s National Center for Chronic Disease Prevention and Health Promotion (NCCDPHP) is strengthening the consistency and quality of the guidance, communications, and technical assistance provided to states to improve coordination across our state programs”*
+    a. **State Governor as of the beginning of the pandemic:** Based on [Wikipedia’s Table of State Governors (click for permanent link to the version we scraped)](https://en.wikipedia.org/w/index.php?title=List_of_United_States_governors&oldid=977828843), we scraped the Governor’s party affiliation since we hypothesized that it may impact the type of policies used on a state-level. Given that the *District of Columbia* does not have a governor, we imputed its value with “Democratic” since D.C.’s Mayor is a Democrat (and DC is not a state).  
+    b. **State's CDC Region Classification:** We have also engineered a region variable based on the [CDC’s 10 Regions Framework](https://www.cdc.gov/coordinatedchronic/docs/nccdphp-regions-map.pdf). While geographic regions are hypothesized to be a factor in disease outbreaks, we chose to utilize the CDC regions specifically based on the following explanation from the aforementioned link: *“CDC’s National Center for Chronic Disease Prevention and Health Promotion (NCCDPHP) is strengthening the consistency and quality of the guidance, communications, and technical assistance provided to states to improve coordination across our state programs”*
 
 ```{r extractingData}
 # (1) Obtaining the svi data
-svi <- read_csv("../Data/Input/SVI2018_US_COUNTY.csv") %>% 
+svi <- read_csv("https://raw.githubusercontent.com/fmegahed/covid19-deaths/master/Data/Input/SVI2018_US_COUNTY.csv") %>% 
   clean_names() %>% # make everything lower_case
   select(location, fips, state, county, area_sqmi, e_totpop,
          rpl_theme1, rpl_theme2, rpl_theme3, rpl_theme4) %>% # columns of interest
@@ -156,17 +155,8 @@ svi <- read_csv("../Data/Input/SVI2018_US_COUNTY.csv") %>%
   filter(!state %in% c('HAWAII', 'ALASKA')) # filtering to contiguous US
 
 
-# (2) Political and Adminstrative Data
-#### (a) 2016 Elections results on a county level
-elections2016 <- read_csv("../Data/Input/countypres_2000-2016.csv") %>% # reading data
-  clean_names() %>% 
-  filter(year == 2016 & party == "republican" & # data for 2016 elections as %republican votes
-         !state %in% c('Alaska', 'Hawaii') ) %>% # contiguous US states only
-  mutate(fips = str_pad(fips, width = 5, side = 'left', pad = '0'), # proper FIPS data
-         percRepVotes = 100*(candidatevotes/totalvotes) ) %>% # computing % republican votes (from total votes)
-  select(fips, percRepVotes)
-
-#### (b) State Governor
+# (2) Political and Administrative Data
+#### (a) State Governor
 stateGovernor <- "https://en.wikipedia.org/w/index.php?title=List_of_United_States_governors&oldid=977828843" %>%
   read_html() %>% html_node("table:nth-child(9)") %>% html_table(header = 2, fill = TRUE) # scraping data
 colnames(stateGovernor) <- stateGovernor[1,] %>% tolower() # lower case first row and making it colnames
@@ -176,7 +166,7 @@ stateGovernor$party %<>% recode(`Democratic–Farmer–Labor` = 'Democratic', #r
 stateGovernor$state %<>%  toupper() # converting to upper case to match the names in the svi dataset
 stateGovernor[51,] = c('DISTRICT OF COLUMBIA', 'Democratic') # since DC Mayor is a Democrat (DC is not a state)
 
-#### (c) State Region Classification
+#### (b) State Region Classification
 cdcRegions = data.frame(state = c('Connecticut', 'Maine', 'Massachusetts', 'New Hampshire', 'Rhode Island' , 
                                    'Vermont', 'New York', # End of Region A
                                    'Delaware', 'District of Columbia', 'Maryland', 'Pennsylvania',
@@ -199,8 +189,7 @@ cdcRegions = data.frame(state = c('Connecticut', 'Maine', 'Massachusetts', 'New 
 
 
 # (3) Combining all the potential predictors in a crossSectionDatal Frame
-crossSectionalData <- inner_join(svi, elections2016, by = 'fips') %>% 
-  left_join(stateGovernor, by = 'state') %>% 
+crossSectionalData <- left_join(svi, stateGovernor, by = 'state') %>% 
   left_join(cdcRegions, by = 'state')
 
 # saving the results as a RDS File
@@ -215,7 +204,7 @@ datatable(crossSectionalData %>% select(-c(state, county)),
             fixedColumns = list(leftColumns = 2))
           ) %>% 
   formatRound(columns= c('area_sqmi', 'rpl_theme1', 'rpl_theme2',
-                         'rpl_theme3', 'rpl_theme4', 'e_popdensity', 'percRepVotes'),
+                         'rpl_theme3', 'rpl_theme4', 'e_popdensity'),
               digits=2)
 ```
 
@@ -273,7 +262,7 @@ ggplotly(p, height = 768) %>%  layout_ggplotly()
 ### RPL Theme 1
 ```{r rpl1Map}
 # Retrieving the U.S. county composite map as a simplefeature
-cty_sf <- counties_sf("longlat") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
+cty_sf <- counties_sf("aeqd") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
 cty_sf %<>% geo_join(crossSectionalData, by_sp= 'fips', by_df= 'fips')
 
 # Saving a static version of the figure as tiff
@@ -318,24 +307,11 @@ invisible( dev.off() ) # to suppress the unwanted output from dev.off
 readTIFF("../Figures/rplTheme4Map.tiff") %>% grid.raster()
 ```
 
-
-### Percent Republican Vote
-```{r percRepVotesMap}
-# Saving a static version of the figure (capitalizing on the tmap package)
-tiff(filename = '../Figures/percRepVotesMap.tiff', width = 1366, height =768, pointsize = 16)
-tm_shape(cty_sf) + tm_polygons('percRepVotes', title ='% Republican Votes', style = 'cont', palette = "div") +
-  tm_layout(aes.palette = list(div = c('#2166AC', '#F7F7F7', '#B2182B')))
-invisible( dev.off() ) # to suppress the unwanted output from dev.off
-
-# Printing a png version of the plot in Markdown (lower quality image for quicker compilation of HTML)
-readTIFF("../Figures/percRepVotesMap.tiff") %>% grid.raster()
-```
-
 ### CDC Regions
 ```{r cdcMap}
 crossSectionalData$state %<>% tolower() %>% tools::toTitleCase()
 # Retrieving the U.S. state composite map as a simplefeature
-state_sf <- usa_sf("longlat") %>% filter(!name %in% c('Alaska', 'Hawaii')) # from albersua
+state_sf <- usa_sf("aeqd") %>% filter(!name %in% c('Alaska', 'Hawaii')) # from albersua
 state_sf %<>% geo_join(crossSectionalData, by_sp= 'name', by_df= 'state')
 
 # Saving a static version of the figure (capitalizing on the tmap package)
@@ -520,19 +496,24 @@ invisible( dev.off() ) # to suppress the unwanted output from dev.off
 
 
 # Creating an interactive visual Using the Leaflet Package
+#### Creating a longlat projection (required by leaflet)
+leaflet_sf <- counties_sf("longlat") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
+leaflet_sf %<>% geo_join(crossSectionalData, by_sp= 'fips', by_df= 'fips') %>% 
+  left_join(clusterCounties[, c('fips', 'cluster_group')], by = 'fips')
+
 #### Setting the Color Scheme
-leafletPal <-  colorFactor('Set2', domain = cty_sf$cluster_group, na.color = "white")
+leafletPal <-  colorFactor('Set2', domain = leaflet_sf$cluster_group, na.color = "white")
 
 #### The visual
 leaflet(height=500) %>% # initializing the leaflet map
   setView(lng = -96, lat = 37.8, zoom = 3.8) %>% # setting the view on Continental US
   addTiles() %>% # adding the default tiles
-  addPolygons(data = cty_sf, stroke = FALSE, fillColor = ~leafletPal(cty_sf$cluster_group), # adding the data
+  addPolygons(data = leaflet_sf, stroke = FALSE, fillColor = ~leafletPal(leaflet_sf$cluster_group), # adding the data
               weight = 2, opacity = 1, color = "white", dashArray = "3", fillOpacity = 0.7, # adding color specs
-              popup = paste("County:", cty_sf$name, '<br>', 
-                            "Cluster #:", cty_sf$cluster_group, '<br>',
-                            "Population Density:", round(cty_sf$e_popdensity, 1), '<br>')) %>% #pop-up Menu
-  addLegend(position = "bottomleft", pal = leafletPal, values =  cty_sf$cluster_group, 
+              popup = paste("County:", leaflet_sf$name, '<br>', 
+                            "Cluster #:", leaflet_sf$cluster_group, '<br>',
+                            "Population Density:", round(leaflet_sf$e_popdensity, 1), '<br>')) %>% #pop-up Menu
+  addLegend(position = "bottomleft", pal = leafletPal, values =  leaflet_sf$cluster_group, 
             title = "Cluster #", opacity = 1) # legend formatting
 ```
 
@@ -645,7 +626,7 @@ mapResults$LargestProbCluster <- colnames(mapResults[, startCol:endCol])[apply(m
 mapResults$match <- ifelse(mapResults$cluster_group == mapResults$LargestProbCluster, 'Yes', 'No') %>% as.factor()
 
 # Retrieving the U.S. county composite map as a simplefeature (since it has been overwritten)
-cty_sf <- counties_sf("longlat") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
+cty_sf <- counties_sf("aeqd") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
 cty_sf %<>% geo_join(mapResults, by_sp= 'fips', by_df= 'fips')
 
 # Creating a static visual for the paper
@@ -656,6 +637,10 @@ invisible( dev.off() ) # to suppress the unwanted output from dev.off
 
 
 # Creating an interactive visual Using the Leaflet Package
+#### Creating a longlat projection (required by leaflet)
+leaflet_sf <- counties_sf("longlat") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
+leaflet_sf %<>% geo_join(mapResults, by_sp= 'fips', by_df= 'fips')
+
 #### Setting the Color Scheme
 leafletPal <-  colorFactor(palette = c("#CAB2D6", "#6A3D9A"), levels = c('Yes', 'No'), na.color = "white")
 
@@ -663,13 +648,13 @@ leafletPal <-  colorFactor(palette = c("#CAB2D6", "#6A3D9A"), levels = c('Yes', 
 leaflet(height=500) %>% # initializing the leaflet map
   setView(lng = -96, lat = 37.8, zoom = 3.8) %>% # setting the view on Continental US
   addTiles() %>% # adding the default tiles
-  addPolygons(data = cty_sf, stroke = FALSE, fillColor = ~leafletPal(cty_sf$match), # adding the data
+  addPolygons(data = leaflet_sf, stroke = FALSE, fillColor = ~leafletPal(leaflet_sf$match), # adding the data
               weight = 2, opacity = 1, color = "white", dashArray = "3", fillOpacity = 0.7, # adding color specs
-              popup = paste("County:", cty_sf$name, '<br>', 
-                            "Cluster #:", cty_sf$cluster_group, '<br>',
-                            "Cluster Predicted:", cty_sf$LargestProbCluster, '<br>',
-                            "Cluster Match:", cty_sf$match, '<br>')) %>% #pop-up Menu
-  addLegend(position = "bottomleft", pal = leafletPal, values =  cty_sf$match, 
+              popup = paste("County:", leaflet_sf$name, '<br>', 
+                            "Cluster #:", leaflet_sf$cluster_group, '<br>',
+                            "Cluster Predicted:", leaflet_sf$LargestProbCluster, '<br>',
+                            "Cluster Match:", leaflet_sf$match, '<br>')) %>% #pop-up Menu
+  addLegend(position = "bottomleft", pal = leafletPal, values =  leaflet_sf$match, 
             title = "Cluster Match", opacity = 1) # legend formatting
 ```
 
