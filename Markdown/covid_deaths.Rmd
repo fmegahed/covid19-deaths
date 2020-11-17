@@ -41,7 +41,7 @@ library(ggplot2); theme_set(theme_bw(base_size = 16, base_family = "Arial")) # s
 # R Setup and Required Packages
 In this project, the open-source R programming language is used to model the progression in the COVID-19 pandemic in different U.S. counties. R is maintained by an international team of developers who make the language available at [The Comprehensive R Archive Network](https://cran.r-project.org/). Readers interested in reusing our code and reproducing our results should have R installed locally on their machines. R can be installed on a number of different operating systems (see [Windows](https://cran.r-project.org/bin/windows/), [Mac](https://cran.r-project.org/bin/macosx/), and [Linux](https://cran.r-project.org/bin/linux/) for the installation instructions for these systems). We also recommend using the RStudio interface for R. The reader can [download RStudio](http://www.rstudio.com/ide) for free by following the instructions at the link. For non-R users, we recommend the [Hands-on Programming with R](https://rstudio-education.github.io/hopr/packages.html) for a brief overview of the software's functionality. Hereafter, we assume that the reader has an introductory understanding of the R programming language.
 
-In the code chunk below, we load the packages used to support our analysis. Note that the code of this and any of the code chunks can be hidden by clicking on the 'Hide' button to facilitate the navigation. **The reader can hide all code and/or download the RMD file associated with this document by clicking on the Code button on the top right corner of this document.** Our input and output files can also be accessed/ downloaded from [fmegahed/covid19-deaths](https://github.com/fmegahed/covid19-deaths). 
+In the code chunk below, we load the packages used to support our analysis. Note that the code of this and any of the code chunks can be hidden by clicking on the 'Hide' button to facilitate the navigation. **The reader can hide all code and/or download the Rmd file associated with this document by clicking on the Code button on the top right corner of this document.** Our input and output files can also be accessed/ downloaded from [fmegahed/covid19-deaths](https://github.com/fmegahed/covid19-deaths). 
 
 
 ```{r packages, cache=FALSE}
@@ -685,7 +685,7 @@ leaflet(height=500) %>% # initializing the leaflet map
 ```
 
 ### A Note on Our Predictive Performance
-In the code chunk below, we capitalize on the [MuMIn package](https://cran.r-project.org/web/packages/MuMIn/MuMIn.pdf) to generate a model selection table of models with combinations (subsets) of fixed effect terms in the global model. More specifically, the code below identifies the combination of predictors (and hence the number of model parameters) that would minimize the *AIC* metric.
+In the code chunk below, we capitalize on the [MuMIn package](https://cran.r-project.org/web/packages/MuMIn/MuMIn.pdf) to generate a model selection table of models with combinations (subsets) of fixed effect terms in the global model. More specifically, the code below identifies the combination of predictors (and hence the number of model parameters) that would minimize the *AIC*.
 ```{r multiModelInference}
 dfNoNAs <- na.omit(df) # since the MuMIn package expects no NAs in the data frame
 fm <-  quiet(multinom(clustReLeveled ~ ., data = dfNoNAs, na.action = na.fail)) # create model
@@ -704,7 +704,7 @@ datatable(ms %>% as.data.frame() %>% select(-c(delta, weight)),
 With the use of an alternative model selection criterion and this evaluation, we confirm that the optimal multinomial regression model:  
 
   - includes the variables denoted with a '+' sign (in the first row of the printed table);  
-  - contains `r round(ms[1,] %>% as.data.frame() %>% select(AIC), 0)` parameters in the model;  
+  - contains `r round(ms[1,] %>% as.data.frame() %>% select(df), 0)` parameters in the model;  
   - results in a logLik values of `r round(ms[1,] %>% as.data.frame() %>% select(logLik), 0)`; and  
   - results in a minimum AIC of `r round(ms[1,] %>% as.data.frame() %>% select(AIC), 0)`.  
 
