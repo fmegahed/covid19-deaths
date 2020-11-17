@@ -6,3 +6,12 @@ layout_ggplotly <- function(gg, x = -0.02, y = -0.08){
   gg[['x']][['layout']][['annotations']][[2]][['x']] <- y
   gg
 }
+
+
+# Suppressing output from cat() by Hadeley Wickham per
+# https://r.789695.n4.nabble.com/Suppressing-output-e-g-from-cat-tp859876p859882.html
+quiet <- function(x) { 
+  sink(tempfile()) 
+  on.exit(sink()) 
+  invisible(force(x)) 
+} 

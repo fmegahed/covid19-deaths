@@ -45,15 +45,12 @@ In the code chunk below, we load the packages used to support our analysis. Note
 
 
 ```{r packages, cache=FALSE}
+# Check and install if these packages are not found locally on machine
 if(require(pacman)==FALSE) install.packages("pacman") # check to see if the pacman package is installed; if not install it
 if(require(devtools)==FALSE) install.packages("devtools") # check to see if the devtools package is installed; if not install it
-
-# to check and install if these packages are not found locally on machine
 if(require(albersusa)==FALSE) devtools::install_github('hrbrmstr/albersusa') #install package if needed
-if(require(albersusa)==FALSE) devtools::install_github('dreamRs/r2d3maps') #install package if needed
 
-
-# check if packages are not installed; if yes, install missing packages
+# Install (if needed) and load the following packages
 pacman::p_load(tidyverse, magrittr, janitor, dataPreparation, lubridate, skimr, # for data analysis
                COVID19, rvest, # for extracting relevant data
                DT, pander, stargazer, knitr, # for formatting and nicely printed outputs
@@ -94,7 +91,7 @@ In this section, we utilize the [COVID19 package](https://cran.r-project.org/web
 From this information, we have also computed the new daily and weekly confirmed cases/deaths per county. The data is stored in a tidy format, but can be expanded to a wide format using `pivot_wider()` from the [tidyverse package](https://www.tidyverse.org/).
 
 ```{r counties}
-endDate = '2020-11-07'
+endDate = '2020-11-14'
 endDatePrintV = format(ymd(endDate), format = "%b %d, %Y")
 
 counties = covid19(country = "US", 
@@ -142,7 +139,9 @@ In this analysis, we have extracted the following datasets:
     
   (2) We also extracted the following **political and administrative variables**, as of the beginning of the pandemic:  
     a. **State Governor as of the beginning of the pandemic:** Based on [Wikipedia’s Table of State Governors (click for permanent link to the version we scraped)](https://en.wikipedia.org/w/index.php?title=List_of_United_States_governors&oldid=977828843), we scraped the Governor’s party affiliation since we hypothesized that it may impact the type of policies used on a state-level. Given that the *District of Columbia* does not have a governor, we imputed its value with “Democratic” since D.C.’s Mayor is a Democrat (and DC is not a state).  
-    b. **State's CDC Region Classification:** We have also engineered a region variable based on the [CDC’s 10 Regions Framework](https://www.cdc.gov/coordinatedchronic/docs/nccdphp-regions-map.pdf). While geographic regions are hypothesized to be a factor in disease outbreaks, we chose to utilize the CDC regions specifically based on the following explanation from the aforementioned link: *“CDC’s National Center for Chronic Disease Prevention and Health Promotion (NCCDPHP) is strengthening the consistency and quality of the guidance, communications, and technical assistance provided to states to improve coordination across our state programs”*
+    b. **State's CDC Region Classification:** We have also engineered a region variable based on the [CDC’s 10 Regions Framework](https://www.cdc.gov/coordinatedchronic/docs/nccdphp-regions-map.pdf). While geographic regions are hypothesized to be a factor in disease outbreaks, we chose to utilize the CDC regions specifically based on the following explanation from the aforementioned link: *“CDC’s National Center for Chronic Disease Prevention and Health Promotion (NCCDPHP) is strengthening the consistency and quality of the guidance, communications, and technical assistance provided to states to improve coordination across our state programs”*  
+  
+  (3) We also extracted **an overall government response index capturing the strength of COVID-19 response policies on a state (and the District of Columbia) level** from the [Blavatnik School of Government's GitHub Repository](https://github.com/OxCGRT/USA-covid-policy). This index captures 13 different indicators, capturing the ``full range of government response''. Details for how this indicator is computed can be found at [BSG-WP-2020/034](https://www.bsg.ox.ac.uk/sites/default/files/2020-08/BSG-WP-2020-034.pdf).
 
 ```{r extractingData}
 # (1) Obtaining the svi data
@@ -187,10 +186,26 @@ cdcRegions = data.frame(state = c('Connecticut', 'Maine', 'Massachusetts', 'New 
                                     rep('G', 4), rep('H', 6), rep('I', 4),
                                     rep('J', 4) ) )
 
+# (3) Policy Data
+policy <- read_csv('https://raw.githubusercontent.com/OxCGRT/USA-covid-policy/master/data/OxCGRT_US_latest.csv')
+policy <- filter(policy, !is.na(RegionName) | !RegionName %in% c('Alaska', 'Hawaii'))
+policy$state <- toupper(policy$RegionName) # a state variable = an upper case of existing RegionName
+policy$Date %<>% ymd() # converting the Date data to a date format
 
-# (3) Combining all the potential predictors in a crossSectionDatal Frame
+# Calculating a summary table of median value for the GovernmentResponseIndex per state
+policySummary <- policy %>%
+  filter(Date >= '2020-03-01' & Date <= endDate) %>% # to match our COVID Data timeSeries
+  group_by(state) %>% # perform computations using the median value, per state, for each index
+  summarise(GovernmentResponseIndexMedian = median(GovernmentResponseIndex, na.rm = TRUE))
+
+# editing the name of Washington DC to District of Columbia to match the other datasets
+policySummary$state %<>%  str_replace('WASHINGTON DC', 'DISTRICT OF COLUMBIA')
+
+
+# (4) Combining all the potential predictors in a crossSectionDatal Frame
 crossSectionalData <- left_join(svi, stateGovernor, by = 'state') %>% 
-  left_join(cdcRegions, by = 'state')
+  left_join(cdcRegions, by = 'state') %>% 
+  left_join(policySummary, by = 'state')
 
 # saving the results as a RDS File
 saveRDS(crossSectionalData, '../Data/Output/crossSectionalData.rds')
@@ -334,6 +349,18 @@ invisible( dev.off() ) # to suppress the unwanted output from dev.off
 # Printing a png version of the plot in Markdown (lower quality image for quicker compilation of HTML)
 readTIFF("../Figures/governorsMap.tiff") %>% grid.raster()
 ```
+
+### Government Response Index Median Value
+```{r govResponseMap}
+# Saving a static version of the figure (capitalizing on the tmap package)
+tiff(filename = '../Figures/governmentResponseMap.tiff', width = 1366, height =768, pointsize = 16)
+tm_shape(state_sf) + tm_polygons('GovernmentResponseIndexMedian', title = "Median Value of the Government Response Index", palette = "-Greens")
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
+
+# Printing a png version of the plot in Markdown (lower quality image for quicker compilation of HTML)
+readTIFF("../Figures/governmentResponseMap.tiff") %>% grid.raster()
+```
+
 
 # Time-Series Clustering 
 
