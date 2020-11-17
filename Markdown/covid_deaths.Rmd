@@ -57,7 +57,7 @@ pacman::p_load(tidyverse, magrittr, janitor, dataPreparation, lubridate, skimr, 
                scales, RColorBrewer, DataExplorer, tiff, grid,# for plots
                plotly, albersusa, tigris, leaflet, tmap, # for maps
                zoo, fpp2, NbClust, # for TS analysis and clustering
-               VIM, nnet, caret, # explanatory modeling
+               VIM, nnet, caret, MuMIn, # explanatory modeling
                conflicted) # for managing conflicts in functions with same names
 
 # Handling conflicting function names from packages
@@ -607,7 +607,7 @@ df <- multiClassDF %>% select(-c(fips, location)) %>%
 df$clustReLeveled <-  relevel(df$cluster_group, ref = maxCat(df$cluster_group) )
 df  <-  df %>% select(-c(cluster_group)) # removed since we created a reLeveled version and stored it in a diff va
 
-finalModel <-  multinom(clustReLeveled ~ ., data = df) # create model
+finalModel <-  quiet(multinom(clustReLeveled ~ ., data = df)) # create model
 ```
 
 ### Resulting Model
@@ -635,7 +635,6 @@ pander(confMatrix$table)
 pander(confMatrix$byClass)
 pander(confMatrix$overall)
 ```
-
 
 ### Visualizing the Model's Predictions
 
@@ -685,6 +684,31 @@ leaflet(height=500) %>% # initializing the leaflet map
             title = "Cluster Match", opacity = 1) # legend formatting
 ```
 
+### A Note on Our Predictive Performance
+In the code chunk below, we capitalize on the [MuMIn package](https://cran.r-project.org/web/packages/MuMIn/MuMIn.pdf) to generate a model selection table of models with combinations (subsets) of fixed effect terms in the global model. More specifically, the code below identifies the combination of predictors (and hence the number of model parameters) that would minimize the *AIC* metric.
+```{r multiModelInference}
+dfNoNAs <- na.omit(df) # since the MuMIn package expects no NAs in the data frame
+fm <-  quiet(multinom(clustReLeveled ~ ., data = dfNoNAs, na.action = na.fail)) # create model
+ms <- quiet(dredge(fm, rank = 'AIC')) # generating the model selection table
+
+# Printing the models with the lowest AIC first
+datatable(ms %>% as.data.frame() %>% select(-c(delta, weight)),
+          extensions = c('FixedColumns', 'Buttons'), options = list(
+            dom = 'Bfrtip',
+            scrollX = TRUE,
+            buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+            fixedColumns = list(leftColumns = 0, rightColumns = 3)),
+          rownames = FALSE) %>% 
+  formatRound(columns= c('logLik', 'AIC'), digits=0)
+```
+With the use of an alternative model selection criterion and this evaluation, we confirm that the optimal multinomial regression model:  
+
+  - includes the variables denoted with a '+' sign (in the first row of the printed table);  
+  - contains `r round(ms[1,] %>% as.data.frame() %>% select(AIC), 0)` parameters in the model;  
+  - results in a logLik values of `r round(ms[1,] %>% as.data.frame() %>% select(logLik), 0)`; and  
+  - results in a minimum AIC of `r round(ms[1,] %>% as.data.frame() %>% select(AIC), 0)`.  
+
+
 
 # Concluding Remarks
 In this R Markdown document, we have shown that our proposed two stage framework for modeling the smoothed and scaled time series of new daily cases can provide insights into the shape of the outbreak's time-series and some of its associated factors. Specifically, we have shown that:  
@@ -705,5 +729,5 @@ In this R Markdown document, we have shown that our proposed two stage framework
 In this appendix, we print all the R packages used in our analysis and their versions to assist with reproducing our results/analysis.
 
 ```{r sessionInfo}
-pander(sessionInfo(), compact = TRUE)
+pander(sessionInfo(), compact = TRUE) # printing the session info
 ```
