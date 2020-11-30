@@ -30,7 +30,7 @@ knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
                       progress = FALSE, 
                       verbose = FALSE,
-                      dpi = 600,
+                      dpi = 1000,
                       out.width = '100%')
 options(qwraps2_markup = "markdown")
 
@@ -91,7 +91,7 @@ In this section, we utilize the [COVID19 package](https://cran.r-project.org/web
 From this information, we have also computed the new daily and weekly confirmed cases/deaths per county. The data is stored in a tidy format, but can be expanded to a wide format using `pivot_wider()` from the [tidyverse package](https://www.tidyverse.org/).
 
 ```{r counties}
-endDate = '2020-11-14'
+endDate = '2020-11-28'
 endDatePrintV = format(ymd(endDate), format = "%b %d, %Y")
 
 counties = covid19(country = "US", 
@@ -106,7 +106,7 @@ counties = covid19(country = "US",
 
 counties %<>% # next line removes non-contiguous US states/territories
   filter(!administrative_area_level_2 %in% c('Alaska', 'Hawaii', 'Puerto Rico', 'Northern Mariana Islands', 'Virgin Islands')) %>% 
-  fastFilterVariables(verbose = FALSE) %>% #dropping invariant columns or bijections
+  fast_filter_variables(verbose = FALSE) %>% #dropping invariant columns or bijections
   filter(!is.na(key_numeric)) %>%  # these are not counties
   group_by(id) %>% # grouping the data by the id column to make computations correct
   arrange(id, date) %>% # to ensure correct calculations
@@ -385,7 +385,7 @@ clusteringPrep <- counties %>% # from the counties
   select(id, key_google_mobility, date, scaledNewMA7) %>% # dropping the variable newDeaths
   pivot_wider(names_from = date, values_from = scaledNewMA7) # converting the data to a wide format for clustering
 
-constantColumns  <- whichAreConstant(clusteringPrep, verbose = F) # identifying constant columns
+constantColumns  <- which_are_constant(clusteringPrep, verbose = F) # identifying constant columns
 datesDropped <- colnames(clusteringPrep)[constantColumns] # used for printing the names after the code chunk
 
 clusteringPrep %<>% select(-all_of(constantColumns) ) %>%  # speeds up clustering by dec length of series
