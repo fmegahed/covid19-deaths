@@ -30,7 +30,7 @@ knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
                       progress = FALSE, 
                       verbose = FALSE,
-                      dpi = 1000,
+                      dpi = 600,
                       out.width = '100%')
 options(qwraps2_markup = "markdown")
 
