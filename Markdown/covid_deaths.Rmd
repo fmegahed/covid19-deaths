@@ -91,7 +91,7 @@ In this section, we utilize the [COVID19 package](https://cran.r-project.org/web
 From this information, we have also computed the new daily and weekly confirmed cases/deaths per county. The data is stored in a tidy format, but can be expanded to a wide format using `pivot_wider()` from the [tidyverse package](https://www.tidyverse.org/).
 
 ```{r counties}
-endDate = '2020-11-28'
+endDate = '2020-12-31'
 endDatePrintV = format(ymd(endDate), format = "%b %d, %Y")
 
 counties = covid19(country = "US", 
