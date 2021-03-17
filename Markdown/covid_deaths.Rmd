@@ -91,7 +91,7 @@ In this section, we utilize the [COVID19 package](https://cran.r-project.org/web
 From this information, we have also computed the new daily and weekly confirmed cases/deaths per county. The data is stored in a tidy format, but can be expanded to a wide format using `pivot_wider()` from the [tidyverse package](https://www.tidyverse.org/).
 
 ```{r counties}
-endDate = '2020-12-31'
+endDate = '2021-02-27'
 endDatePrintV = format(ymd(endDate), format = "%b %d, %Y")
 
 counties = covid19(country = "US", 
@@ -163,7 +163,8 @@ stateGovernor <- stateGovernor[-1, c(1,5)] # dropping first row
 stateGovernor$party %<>% recode(`Democratic–Farmer–Labor` = 'Democratic', #replacing  w/ Democratic
                                `Republican[note 1]` = 'Republican' ) #from Republican[note 1] to Republican
 stateGovernor$state %<>%  toupper() # converting to upper case to match the names in the svi dataset
-stateGovernor[51,] = c('DISTRICT OF COLUMBIA', 'Democratic') # since DC Mayor is a Democrat (DC is not a state)
+stateGovernor = rbind(stateGovernor,
+                      c('DISTRICT OF COLUMBIA', 'Democratic')) # since DC Mayor is a Democrat (DC is not a state)
 
 #### (b) State Region Classification
 cdcRegions = data.frame(state = c('Connecticut', 'Maine', 'Massachusetts', 'New Hampshire', 'Rhode Island' , 
@@ -379,7 +380,7 @@ It is important to note that, in our estimation, there are three important decis
 clusteringPrep <- counties %>% # from the counties
   select(id, date, key_google_mobility, newDeaths) %>% # selecting minimal amount of cols for visual inspection
   arrange(id, date) %>% # arranged to ensure correct calculations
-  mutate(newMA7 = rollmeanr(newDeaths, k = 7, fill = NA), # 7-day ma of new (adjusted) deaths
+  mutate(newMA7 = rollmeanr(newDeaths, k = 7, fill = NA), # 7-day mm of new (adjusted) deaths
          maxMA7 = max(newMA7, na.rm = T), # obtaining the max per county to scale data
          scaledNewMA7 = pmax(0, newMA7/maxMA7, na.rm = TRUE) ) %>% # scaling data to a 0-1 scale by county
   select(id, key_google_mobility, date, scaledNewMA7) %>% # dropping the variable newDeaths
@@ -403,7 +404,7 @@ The following dates were removed from our data frame since the `scaledNEWMA7` va
 clusteringPrep %<>% select(-c(key_google_mobility))  # removing this variable so we can cluster
 
 nc  <- NbClust(clusteringPrep, distance = "euclidean", # euclidean distance
-             min.nc = 2, max.nc = 50, # searching for optimal k between k=2 and k=50
+             min.nc = 2, max.nc = 51, # searching for optimal k between k=2 and k=51
              method = "kmeans", # using the k-means method
              index = "all") # using 26 of the 30 indices in the package
 
@@ -454,6 +455,8 @@ spaghettiDF <- counties %>% # from the counties
          scaledNewMA7 = pmax(0, newMA7/maxMA7, na.rm = TRUE) ) %>% 
   ungroup() %>% select(date, cluster_group, scaledNewMA7, key_google_mobility) %>% 
   group_by(date, cluster_group)
+
+spaghettiDF$cluster_group %<>% as.factor() 
 
 # Creating a Named Color Scale
 colorPal <-  brewer.pal(n= levels(spaghettiDF$cluster_group) %>% length(), 'Set2')
