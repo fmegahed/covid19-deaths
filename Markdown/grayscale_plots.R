@@ -149,3 +149,64 @@ multiClassDF <- readRDS("../Data/Output/multiClassDF.rds") %>%
 
 skim(multiClassDF, where(is.numeric)) %>% kable(format = "latex", booktabs = T) %>%
   kableExtra::kable_styling(font_size = 9)
+
+
+
+#############################################################################
+
+counties = covid19(country = 'US', level = 3, start = '2020-03-01', end = endDate,
+                   raw = FALSE)
+
+counties %<>% select(id, key_google_mobility, date, deaths) %>% 
+  mutate(newDeaths = c(NA, diff(deaths)),
+         newMA7 = rollmeanr(newDeaths, k = 7, fill = NA))
+
+us = covid19(country = 'US', level = 1, start = '2020-03-01', end = endDate)
+us %<>% select(id, key_google_mobility, date, deaths) %>% 
+  mutate(newDeaths = c(NA, diff(deaths)),
+         newMA7 = rollmeanr(newDeaths, k = 7, fill = NA))
+
+indices = c('Alabama, Lee County', 'California, Los Angeles County',
+            'Illinois, Madison County', 'Kansas, Stevens County', 'New Jersey, Ocean County',
+            'New York, New York County', 'Ohio, Butler County', 'Texas, Cameron County') # some counties
+
+# filtering some counties and combining both data frames
+df = counties %>% filter(key_google_mobility %in% indices)
+df = rbind(us, df)
+
+df$key_google_mobility %<>% recode(US = 'Aggregate for the Entire US')
+
+pdf(file = '../Figures/nonScaledDeaths.pdf',
+    width = 6.5, height = 3.75, pointsize = 8)
+df %>%
+  ggplot(aes(x = date, y = newMA7, group = id)) +
+  geom_line() +
+  scale_x_date(date_breaks = "2 month", date_labels = "%b") +
+  facet_wrap(~ key_google_mobility, scales = 'free_y', ncol = 3) +
+  theme(legend.position = 'none') + 
+  labs(color = '', x = 'Month', y = 'Deaths Due to COVID-19') + theme_bw(base_size = 9)
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
+
+
+######################################################################################################
+multiClassDF <- readRDS("J:/My Drive/Miami/Code/GitHub/covid19-deaths/Data/Output/multiClassDF.rds")
+multiClassDF$e_popdensity <- log(multiClassDF$e_popdensity)
+
+multiClassDF %<>% select(-c(fips, location)) %>% group_by(cluster_group)
+
+
+multiClassDF %>% summarise(across(where(is.numeric), 
+                                  list(mean = ~ mean(.x, na.rm = TRUE) %>% round(digits = 2),
+                                       sd = ~ sd(.x, na.rm = TRUE) %>% round(digits = 2) 
+                                       )
+                                  ) 
+                           ) %>% t()
+
+tabyl(multiClassDF, party, cluster_group) 
+tabyl(multiClassDF, party, cluster_group) %>% adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 1)
+
+
+tabyl(multiClassDF, region, cluster_group) 
+tabyl(multiClassDF, region, cluster_group) %>% adorn_percentages("col") %>%
+  adorn_pct_formatting(digits = 1)
