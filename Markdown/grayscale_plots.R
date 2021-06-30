@@ -3,13 +3,14 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 if(require(pacman)==FALSE) install.packages("pacman") # check to see if the pacman package is installed; if not install it
 if(require(devtools)==FALSE) install.packages("devtools") # check to see if the devtools package is installed; if not install it
 if(require(albersusa)==FALSE) devtools::install_github('hrbrmstr/albersusa') #install package if needed
+if(require(urbnmapr)==FALSE) devtools::install_github('UrbanInstitute/urbnmapr')
 
 # Install (if needed) and load the following packages
 pacman::p_load(tidyverse, magrittr, janitor, dataPreparation, lubridate, skimr, # for data analysis
                COVID19, rvest, # for extracting relevant data
                DT, pander, stargazer, knitr, # for formatting and nicely printed outputs
                scales, RColorBrewer, DataExplorer, tiff, grid,# for plots
-               plotly, albersusa, tigris, leaflet, tmap, # for maps
+               plotly, albersusa, tigris, leaflet, tmap, ggsn, urbnmapr, sf, # for maps
                zoo, fpp2, NbClust, # for TS analysis and clustering
                VIM, nnet, caret, MuMIn, # explanatory modeling
                conflicted) # for managing conflicts in functions with same names
@@ -126,18 +127,45 @@ invisible( dev.off() ) # to suppress the unwanted output from dev.off
 
 #########################################################################################
 # Joining the clusterCounties results with the existing county simple features object (cty_sf)
-cty_sf <- counties_sf("aeqd") %>% filter(!state %in% c('Alaska', 'Hawaii')) # from albersua
+cty_sf = get_urbn_map(map = "counties", sf = TRUE) %>% filter(!state_name %in% c('Alaska', 'Hawaii'))
+
+
+bbox_new = sf::st_bbox(cty_sf)
+
+xrange = bbox_new$xmax - bbox_new$xmin # range of x values
+yrange = bbox_new$ymax - bbox_new$ymin # range of y values
+bbox_new[1] = bbox_new[1] - (0.1 * xrange) # xmin - left
+bbox_new[3] = bbox_new[3] + (0.12 * xrange) # xmax - right
+bbox_new[2] = bbox_new[2] - (0.1 * yrange) # ymin - bottom
+
+bbox_new = bbox_new %>%  # take the bounding box ...
+  st_as_sfc() # ... and make it a sf polygon
+
+# Getting the states map from the urbnmapr package and excluding non-continental US
+states_sf = get_urbn_map(map = "states", sf = TRUE) %>% 
+  filter(!state_name %in% c('Alaska', 'Hawaii') )
 
 clusterCounties$fips <- str_pad(clusterCounties$key_numeric, width = 5, side = 'left', pad = '0')
 clusterCounties %<>% ungroup()
-cty_sf %<>% left_join(clusterCounties[, c('fips', 'cluster_group')], by = 'fips') # adding cluster_group to cty_sf
+cty_sf %<>% geo_join(clusterCounties[, c('fips', 'cluster_group')],
+                     by_sp = 'county_fips', by_df  = 'fips' ) # adding cluster_group to cty_sf
 
 # Creating a static visual for the paper
-pdf(file = '../Figures/clusterMap.pdf', width = 6.5, height = 6.5, pointsize = 8)
-tm_shape(cty_sf) + 
-  tm_polygons('cluster_group', title = 'Cluster #', palette = colorPal, colorNA = "black") +
-  tm_style("white") +
-  tm_layout(outer.margins = c(0,0,0,0), frame = F, legend.text.size = 1)
+pdf(file = '../Figures/clusterMap.pdf', width = 6.84, height = 5.83, pointsize = 8)
+cty_sf %>% 
+  ggplot() + theme_minimal() +
+  geom_sf(mapping = aes(fill = cluster_group), color = "gray20", size = 0.1) +
+  geom_sf(data = states_sf, fill = NA, color = "black", size = 0.8) +
+  coord_sf(datum = NA) + 
+  scale_fill_manual(values = c(colorPal), na.value = 'black', name = "Cluster Group") +
+  theme(legend.position = "top",
+        plot.margin = unit(c(0.05, 0.05, 0.05, 0.05), "cm")) +
+  blank() +
+  north(cty_sf, location = "bottomright", symbol = 1, scale = 0.15) +
+  scalebar(cty_sf, dist = 500, dist_unit = "km",
+           transform = FALSE, model = "WGS84", 
+           height = 0.02, st.bottom = FALSE, location = "bottomleft",
+           st.dist = 0.04)
 invisible( dev.off() ) # to suppress the unwanted output from dev.off
 
 
@@ -210,3 +238,65 @@ tabyl(multiClassDF, party, cluster_group) %>% adorn_percentages("col") %>%
 tabyl(multiClassDF, region, cluster_group) 
 tabyl(multiClassDF, region, cluster_group) %>% adorn_percentages("col") %>%
   adorn_pct_formatting(digits = 1)
+
+
+
+
+######################################################################################################
+
+# Cluster Match Map -------------------------------------------------------
+multiClassDF <- readRDS("J:/My Drive/Miami/Code/GitHub/covid19-deaths/Data/Output/multiClassDF.rds")
+
+df <- multiClassDF %>% select(-c(fips, location)) %>% 
+  mutate(cluster_group = as.factor(cluster_group))
+
+df$e_popdensity <- log(df$e_popdensity) # since it is highly skewed and we are using a linear model 
+
+# setting the reference level to category with max frequency
+df$clustReLeveled <-  relevel(df$cluster_group, ref = maxCat(df$cluster_group) )
+df  <-  df %>% select(-c(cluster_group)) # removed since we created a reLeveled version and stored it in a diff va
+
+finalModel <-  multinom(clustReLeveled ~ ., data = df) # create model
+
+predictedClass <- predict(finalModel, df)
+
+predictedProbs <- fitted(finalModel) # computing predicted probabilities for each of the cluster outcome levels
+mapResults <- cbind(na.omit(multiClassDF), predictedProbs) # col binding predProbs for Each Cluster with multiClassDF
+
+# Finding indices to subset the data
+numberOfClusters <- unique(mapResults$cluster_group) %>% as.character() %>% length() 
+startCol <- ncol(mapResults) - numberOfClusters + 1
+endCol <- ncol(mapResults)
+
+# Finding whether the predicted and actual clusters matched for each county
+mapResults$LargestProbCluster <- colnames(mapResults[, startCol:endCol])[apply(mapResults[, startCol:endCol], 1, which.max)] 
+mapResults$match <- ifelse(mapResults$cluster_group == mapResults$LargestProbCluster, 'Yes', 'No') %>% as.factor()
+
+
+cty_sf = get_urbn_map(map = "counties", sf = TRUE) %>% filter(!state_name %in% c('Alaska', 'Hawaii'))
+
+# Getting the states map from the urbnmapr package and excluding non-continental US
+states_sf = get_urbn_map(map = "states", sf = TRUE) %>% 
+  filter(!state_name %in% c('Alaska', 'Hawaii') )
+
+
+cty_sf %<>% geo_join(mapResults, by_sp= 'county_fips', by_df= 'fips') # adding cluster_group to cty_sf
+
+# Creating a static visual for the paper
+pdf(file = '../Figures/clusterMatchMap.pdf', width = 6.84, height = 5.83, pointsize = 8)
+cty_sf %>% 
+  ggplot() + theme_minimal() +
+  geom_sf(mapping = aes(fill = match), color = "gray80", size = 0.1) +
+  geom_sf(data = states_sf, fill = NA, color = "gray20", size = 0.8) +
+  coord_sf(datum = NA) + 
+  scale_fill_manual(values = c("Yes" = "#FFFFFF", "Missing" = "#BDBDBD", "No" = "#000000"), 
+                    name = "Cluster Match", na.value = "#BDBDBD") +
+  theme(legend.position = "top",
+        plot.margin = unit(c(0.05, 0.05, 0.05, 0.05), "cm")) +
+  blank() +
+  north(cty_sf, location = "bottomright", symbol = 1, scale = 0.15) +
+  scalebar(cty_sf, dist = 500, dist_unit = "km",
+           transform = FALSE, model = "WGS84", 
+           height = 0.02, st.bottom = FALSE, location = "bottomleft",
+           st.dist = 0.04)
+invisible( dev.off() ) # to suppress the unwanted output from dev.off
