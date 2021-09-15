@@ -204,15 +204,16 @@ df = rbind(us, df)
 
 df$key_google_mobility %<>% recode(US = 'Aggregate for the Entire US')
 
-pdf(file = '../Figures/nonScaledDeaths.pdf',
-    width = 6.5, height = 3.75, pointsize = 8)
+png(filename = '../Figures/nonScaledDeaths.png',
+    width = 6.5, height = 3.75, pointsize = 9, units = "in", res = 300)
 df %>%
   ggplot(aes(x = date, y = newMA7, group = id)) +
   geom_line() +
   scale_x_date(date_breaks = "2 month", date_labels = "%b") +
   facet_wrap(~ key_google_mobility, scales = 'free_y', ncol = 3) +
   theme(legend.position = 'none') + 
-  labs(color = '', x = 'Month', y = 'Deaths Due to COVID-19') + theme_bw(base_size = 9)
+  labs(color = '', x = 'Month', y = 'Deaths Due to COVID-19',
+       caption = paste0('Based on data from March 01, 2020 - ', endDatePrintV) ) + theme_bw(base_size = 9)
 invisible( dev.off() ) # to suppress the unwanted output from dev.off
 
 
