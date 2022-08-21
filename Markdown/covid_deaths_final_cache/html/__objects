@@ -1,0 +1,25 @@
+counties	counties	endDate	endDatePrintV	factorVars
+extractingData	cdcRegions	crossSectionalData	elections	policy	policySummary	svi	.covid_deaths_final_cache/html/extractingData_59fb0eb820673493aa72391f7af7bf64_meta
+cumCases	idIndex	noGoogleNAs	p	.covid_deaths_final_cache/html/cumCases_4fc340d098f0138a6def9801247737b1_meta
+cumDeaths	p	.covid_deaths_final_cache/html/cumDeaths_979632b5abfc5e536710b8b04a8a08e3_meta
+rpl1Map	cty_sf
+rpl2Map	
+rpl3Map	
+rpl4Map	
+cdcMap	state_sf
+govMap	
+govResponseMap	
+dataPrepClustering	clusteringPrep	constantColumns	datesDropped
+tsClustering	clusterCounties	clusters	idClusters	kclus	nc
+spaghetti	colorPal	spaghettiDF
+summaryPlot	summaryDf
+clusterMap	leaflet_sf	leafletPal	.covid_deaths_final_cache/html/clusterMap_17c31ab819cad9fc59106b7f050d0b90_meta
+skim	multiClassDF
+corrPlot	
+boxPlot	
+multinom	df	finalModel
+multiModel2	
+predictivePerformance	confMatrix	predictedClass
+clusterMatch	cty_sf	endCol	leaflet_sf	leafletPal	mapResults	numberOfClusters	predictedProbs	startCol	.covid_deaths_final_cache/html/clusterMatch_b8b7010e557227d42f10d071aa4d0562_meta
+multiModelInference	dfNoNAs	fm	ms	.covid_deaths_final_cache/html/multiModelInference_ef12dfe898e184afef52181b27f43886_meta
+sessionInfo	

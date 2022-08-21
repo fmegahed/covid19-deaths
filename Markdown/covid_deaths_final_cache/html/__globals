@@ -1,0 +1,25 @@
+counties	!	%<>%	%>%	administrative_area_level_2	any_of	arrange	as.character	as.factor	c	confirmed	covid19	date	deaths	diff	F	factor	filter	format	group_by	id	is.na	key_local	mutate	mutate_at	saveRDS	vars	wday	ymd
+extractingData	!	$	$<-	%<>%	%>%	&	|	~	<=	==	>=	across	area_sqmi	as.character	c	candidatevotes	clean_names	county	county_fips	data.frame	datatable	Date	e_totpop	endDate	filter	fips	formatRound	GovernmentResponseIndex	group_by	is.na	is.numeric	key_local	left_join	list	location	median	mutate	party	percRepVotes	read.csv	read_csv	RegionName	rename	rep	rpl_theme1	rpl_theme2	rpl_theme3	rpl_theme4	saveRDS	select	state	str_pad	str_replace	sum	summarise	totalvotes	toupper	unique	where	year	ymd
+cumCases	!	$	%>%	::	~	aes	confirmed	counties	date	dev.off	facet_wrap	filter	geom_line	ggplot	ggplotly	id	invisible	is.na	key_google_mobility	labs	layout_ggplotly	sample	scale_color_brewer	scale_x_date	theme	theme_bw	tiff
+cumDeaths	%>%	::	~	aes	counties	date	deaths	dev.off	facet_wrap	filter	geom_line	ggplot	ggplotly	id	idIndex	invisible	key_google_mobility	labs	layout_ggplotly	scale_color_brewer	scale_x_date	theme	theme_bw	tiff
+rpl1Map	!	%<>%	%>%	c	crossSectionalData	dev.off	filter	geo_join	get_urbn_map	grid.raster	invisible	readTIFF	state_name	tiff	tm_polygons	tm_shape
+rpl2Map	%>%	cty_sf	dev.off	grid.raster	invisible	readTIFF	tiff	tm_polygons	tm_shape
+rpl3Map	%>%	cty_sf	dev.off	grid.raster	invisible	readTIFF	tiff	tm_polygons	tm_shape
+rpl4Map	%>%	cty_sf	dev.off	grid.raster	invisible	readTIFF	tiff	tm_polygons	tm_shape
+cdcMap	!	$	%<>%	%>%	::	c	crossSectionalData	dev.off	filter	geo_join	get_urbn_map	grid.raster	invisible	readTIFF	state_name	tiff	tm_polygons	tm_shape	tolower
+govMap	%>%	dev.off	grid.raster	invisible	readTIFF	state_sf	tiff	tm_polygons	tm_shape
+govResponseMap	%>%	dev.off	grid.raster	invisible	readTIFF	state_sf	tiff	tm_polygons	tm_shape
+dataPrepClustering	%<>%	%>%	~	all_of	arrange	as.data.frame	c	colnames	counties	date	F	id	key_local	max	maxMA7	mutate	newDeaths	newMA7	pivot_wider	pmax	rollmeanr	row.names<-	saveRDS	scaledNewMA7	select	select_if	T	which_are_constant
+tsClustering	$	%<>%	%>%	.	administrative_area_level_2	administrative_area_level_3	as.data.frame	as.factor	c	cluster_group	clusteringPrep	colnames<-	counties	County	id	inner_join	key_google_mobility	key_local	mutate	NbClust	paste0	pivot_longer	rename	rownames_to_column	saveRDS	select	starts_with	unique
+spaghetti	$	%<>%	%>%	~	aes	arrange	as.factor	brewer.pal	c	cluster_group	clusterCounties	counties	date	dev.off	endDatePrintV	facet_wrap	geom_line	ggplot	grid.raster	group_by	id	invisible	key_google_mobility	labs	left_join	length	levels	max	maxMA7	median	mutate	names<-	newDeaths	newMA7	paste0	pmax	readTIFF	rollmeanr	scale_color_manual	scale_x_date	scaledNewMA7	select	stat_summary	T	theme	tiff	ungroup
+summaryPlot	%>%	~	aes	c	cluster_group	colorPal	date	dev.off	facet_wrap	First Quartile	geom_line	ggplot	grid.raster	invisible	labs	median	Median	pivot_longer	quantile	readTIFF	scale_color_manual	scale_linetype_manual	scale_x_date	scaledNewMA7	spaghettiDF	Statistic	summarise	theme	Third Quartile	tiff	value
+clusterMap	!	$	%<>%	%>%	~	addLegend	addPolygons	addTiles	c	clusterCounties	colorFactor	colorPal	counties_sf	crossSectionalData	cty_sf	dev.off	filter	geo_join	invisible	leaflet	left_join	paste	round	setView	state	tiff	tm_polygons	tm_shape	ungroup
+skim	%>%	area_sqmi	c	cluster_group	clusterCounties	county	crossSectionalData	e_totpop	key_local	left_join	saveRDS	select	skim	state
+corrPlot	%>%	dev.off	grid.raster	invisible	multiClassDF	na.omit	plot_correlation	readTIFF	theme_bw	tiff
+boxPlot	%>%	dev.off	grid.raster	invisible	list	multiClassDF	plot_boxplot	readTIFF	theme_bw	tiff
+multinom	$	$<-	%>%	~	as.factor	c	cluster_group	key_local	location	log	maxCat	multiClassDF	multinom	mutate	quiet	relevel	select
+multiModel2	finalModel	invisible	stargazer
+predictivePerformance	$	confusionMatrix	df	finalModel	pander	predict	saveRDS
+clusterMatch	!	$	$<-	%<>%	%>%	~	==	addLegend	addPolygons	addTiles	apply	as.character	as.factor	c	cbind	colnames	colorFactor	counties_sf	dev.off	F	filter	finalModel	fitted	geo_join	get_urbn_map	ifelse	invisible	leaflet	length	list	multiClassDF	na.omit	ncol	paste	pdf	setView	state	state_name	tm_layout	tm_polygons	tm_shape	unique	which.max
+multiModelInference	%>%	~	as.data.frame	c	datatable	delta	df	dredge	formatRound	list	multinom	na.fail	na.omit	quiet	select	weight
+sessionInfo	pander	sessionInfo
